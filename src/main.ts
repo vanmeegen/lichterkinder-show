@@ -13,7 +13,7 @@ let sheet: Sheet = loadSheet();
 const prefs = JSON.parse(localStorage.getItem('lk-prefs') || '{}');
 let latency: number = prefs.latency ?? 150;
 type Source = 'spotify' | 'file' | 'demo';
-let source: Source = prefs.source ?? 'demo';
+let source: Source = prefs.source ?? 'file';
 let chosen: boolean = !!prefs.source;
 let showLyrics: boolean = prefs.lyrics ?? true;
 const savePrefs = () => localStorage.setItem('lk-prefs', JSON.stringify({ latency, source: chosen ? source : undefined, lyrics: showLyrics }));
@@ -205,7 +205,7 @@ function mood(t: number) {
   const energy = pv + (target - pv) * k;
   const since: Record<string, number> = {};
   for (const c of effects) if (c.t <= t) since[c.type] = t - c.t;
-  return { t, beat: (t * sheet.bpm) / 60, energy, rap: Math.max(0, rapIn), since };
+  return { t, beat: ((t - (sheet.offset ?? 0)) * sheet.bpm) / 60, energy, rap: Math.max(0, rapIn), since };
 }
 
 function frame() {

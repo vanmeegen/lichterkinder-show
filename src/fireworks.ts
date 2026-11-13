@@ -28,12 +28,17 @@ const BACK_Z = -58;
 /** Ablauf aller Bursts aus Abschnitten und Effekt-Markern. */
 export function buildSchedule(sheet: Sheet): Burst[] {
   const rng = S.mulberry32(20261224);
+  const beatLen = 60 / (sheet.bpm || 80), off = sheet.offset ?? 0;
+  const END = Math.min(sheet.end ?? SONG_DURATION, SONG_DURATION);
+  // Explosionen auf den halben Schlag legen, damit es im Takt knallt
+  const snap = (t: number) => off + Math.round((t - off) / (beatLen / 2)) * (beatLen / 2);
   const r = (a: number, b: number) => a + (b - a) * rng();
   const pick = <T,>(a: T[]) => a[Math.floor(rng() * a.length)];
   const out: Burst[] = [];
 
   const add = (t: number, shape: Shape, opt: Partial<Burst> = {}) => {
-    if (t < 1.4 || t > SONG_DURATION - 0.8) return;
+    t = snap(t);
+    if (t < 1.4 || t > END - 0.3) return;
     let c1: Col = C[pick(MIX)], c2: Col = C[pick(MIX)];
     if (shape === 'heart') { c1 = C.red; c2 = C.pink; }
     if (shape === 'tree') { c1 = C.green; c2 = C.gold; }
@@ -60,7 +65,7 @@ export function buildSchedule(sheet: Sheet): Burst[] {
       // Im Takt: abwechselnd links/rechts kleine, knackige Bursts
       const beat = 60 / (sheet.bpm || 100);
       let k = 0;
-      for (let t = sec.t0; t < Math.min(sec.t1, SONG_DURATION - 1.5); t += beat * 2, k++) {
+      for (let t = sec.t0; t < Math.min(sec.t1, END - 1.5); t += beat * 2, k++) {
         const side = k % 2 ? 1 : -1;
         add(t, k % 4 === 3 ? 'ring' : 'sphere', { x: side * r(18, 32), y: r(18, 26), R: r(6, 9), crackle: true, c1: k % 2 ? C.cyan : C.pink, c2: C.white });
         if (k % 8 === 7) add(t + beat, 'star', { x: 0, y: 28, R: 12 });
@@ -69,7 +74,7 @@ export function buildSchedule(sheet: Sheet): Burst[] {
     }
     const p = plan[sec.kind];
     let t = Math.max(sec.t0, sec.kind === 'ruhig' && sec.t0 < 1 ? 7.5 : sec.t0);
-    const end = Math.min(sec.t1, SONG_DURATION - 1.5);
+    const end = Math.min(sec.t1, END - 1.5);
     if (sec.kind === 'refrain') {
       // Eröffnungs-Salve über die ganze Breite
       for (let i = 0; i < 7; i++) add(sec.t0 + i * 0.09, 'sphere', { x: -36 + i * 12, y: r(24, 32), R: r(12, 15) });
@@ -89,10 +94,10 @@ export function buildSchedule(sheet: Sheet): Burst[] {
   for (const c of fxCues) addEffect(c, add, r);
 
   // ---------- Finale ----------
-  const fin = SONG_DURATION - 9;
+  const fin = END - 9;
   for (let k = 0; k < 26; k++) add(fin + k * 0.22, pick(['sphere', 'ring', 'palm', 'willow', 'star'] as Shape[]), { R: r(13, 18) });
-  add(SONG_DURATION - 5.6, 'text', { text: 'Frohe Weihnachten', x: 0, y: 25, z: BACK_Z + 4, R: 34, c1: C.gold, c2: C.white, crackle: true, big: true });
-  for (let i = 0; i < 5; i++) add(SONG_DURATION - 5.6 + 0.4, 'willow', { x: -40 + i * 20, y: 38, R: 15 });
+  add(END - 5.6, 'text', { text: 'Frohe Weihnachten', x: 0, y: 25, z: BACK_Z + 4, R: 34, c1: C.gold, c2: C.white, crackle: true, big: true });
+  for (let i = 0; i < 5; i++) add(END - 5.6 + 0.4, 'willow', { x: -40 + i * 20, y: 38, R: 15 });
 
   out.sort((a, b) => a.t - b.t);
   return out;

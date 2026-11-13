@@ -11,7 +11,7 @@ export function setTrack(linkOrUri: string): string | null {
   return uri;
 }
 /** Länge des Liedes; wird vom Player (Spotify bzw. Datei) automatisch aktualisiert. */
-export let SONG_DURATION = +(localStorage.getItem('lk-duration') || 193.4);
+export let SONG_DURATION = +(localStorage.getItem('lk-duration') || 241.16);
 export function setSongDuration(d: number): boolean {
   if (!(d > 10) || Math.abs(d - SONG_DURATION) < 0.3) return false;
   SONG_DURATION = d; localStorage.setItem('lk-duration', String(d)); return true;
@@ -29,16 +29,36 @@ export const CUE_LABEL: Record<CueType, string> = {
 
 export interface Line { t: number | null; text: string; }
 export interface Cue { t: number; type: CueType; }
-export interface Sheet { lines: Line[]; cues: Cue[]; bpm: number; }
+export interface Sheet { lines: Line[]; cues: Cue[]; bpm: number; offset?: number; end?: number; }
 
 const KEY = 'lk-sheet-v1';
 
-export function emptySheet(): Sheet { return { lines: [], cues: [], bpm: 100 }; }
+// Aus der Audio-Analyse der Datei „01 - Lichterkinder.mp3“ (Album „Laternen- und Herbstlieder“, 4:01):
+// konstant 80 BPM, erster Schlag bei 3,334 s, Abschnitte auf dem Taktraster, Musik endet ~3:55.
+export const SONG_BPM = 80, SONG_OFFSET = 3.334, SONG_END = 235.5;
+export function defaultCues(): Cue[] {
+  return [
+    { t: 0, type: 'ruhig' }, { t: 3.33, type: 'strophe' }, { t: 27.33, type: 'refrain' }, { t: 49.83, type: 'rap' },
+    { t: 75.33, type: 'refrain' }, { t: 100.83, type: 'rap' }, { t: 123.33, type: 'refrain' }, { t: 147.33, type: 'strophe' },
+    { t: 171.33, type: 'refrain' }, { t: 195.33, type: 'ruhig' }, { t: 198.33, type: 'refrain' }, { t: 222.33, type: 'strophe' },
+    { t: 228.33, type: 'ruhig' },
+    { t: 15.33, type: 'stern' }, { t: 27.33, type: 'lichter' }, { t: 39.33, type: 'herz' },
+    { t: 75.33, type: 'lichter' }, { t: 87.33, type: 'schnee' },
+    { t: 123.33, type: 'lichter' }, { t: 135.33, type: 'herz' },
+    { t: 148.83, type: 'martin' }, { t: 160.83, type: 'frieren' },
+    { t: 171.33, type: 'glocken' }, { t: 183.33, type: 'stern' },
+    { t: 198.33, type: 'lichterkinder' }, { t: 210.33, type: 'herz' }, { t: 216.33, type: 'lichter' },
+  ];
+}
+export function emptySheet(): Sheet { return { lines: [], cues: defaultCues(), bpm: SONG_BPM, offset: SONG_OFFSET, end: SONG_END }; }
 
 export function loadSheet(): Sheet {
   try {
     const s = JSON.parse(localStorage.getItem(KEY) || 'null');
-    if (s && Array.isArray(s.lines) && Array.isArray(s.cues)) return { bpm: 100, ...s };
+    if (s && Array.isArray(s.lines) && Array.isArray(s.cues)) {
+      if (!s.cues.length) { s.cues = defaultCues(); s.bpm = SONG_BPM; s.offset = SONG_OFFSET; s.end = SONG_END; }
+      return { bpm: SONG_BPM, offset: SONG_OFFSET, end: SONG_END, ...s };
+    }
   } catch { /* ignore */ }
   return emptySheet();
 }
@@ -65,20 +85,12 @@ export function keywordOf(word: string): CueType | 'weihnacht' | null {
 }
 
 // ---- Abschnitte / Energie ----
-// Standard-Ablauf, solange keine eigenen Marker gesetzt sind.
-const DEFAULT_SECTIONS: Cue[] = [
-  { t: 0, type: 'ruhig' }, { t: 14, type: 'strophe' }, { t: 46, type: 'refrain' }, { t: 78, type: 'strophe' },
-  { t: 108, type: 'refrain' }, { t: 140, type: 'ruhig' }, { t: 158, type: 'refrain' },
-];
-const DEFAULT_EFFECTS: Cue[] = [
-  { t: 62, type: 'herz' }, { t: 124, type: 'lichter' }, { t: 176, type: 'lichterkinder' },
-];
 
 export interface Section { t0: number; t1: number; kind: 'ruhig' | 'strophe' | 'refrain' | 'rap'; }
 
 export function sectionsOf(sheet: Sheet): Section[] {
   let sec = sheet.cues.filter(c => c.type === 'refrain' || c.type === 'strophe' || c.type === 'ruhig' || c.type === 'rap');
-  if (!sec.length) sec = DEFAULT_SECTIONS;
+  if (!sec.length) sec = defaultCues().filter(c => ['refrain', 'strophe', 'ruhig', 'rap'].includes(c.type));
   sec = [...sec].sort((a, b) => a.t - b.t);
   if (sec[0].t > 0.5) sec.unshift({ t: 0, type: 'ruhig' });
   return sec.map((c, i) => ({ t0: c.t, t1: i + 1 < sec.length ? sec[i + 1].t : SONG_DURATION + 5, kind: c.type as Section['kind'] }));
@@ -98,7 +110,7 @@ export function effectCues(sheet: Sheet): Cue[] {
     });
   });
   let all = [...fx, ...auto];
-  if (!sheet.cues.length && !timed.length) all = DEFAULT_EFFECTS;
+  if (!sheet.cues.length && !timed.length) all = defaultCues().filter(c => !['refrain', 'strophe', 'ruhig', 'rap'].includes(c.type));
   all.sort((a, b) => a.t - b.t);
   // gleichartige Effekte innerhalb von 2,5 s zusammenfassen
   const out: Cue[] = [];

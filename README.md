@@ -20,6 +20,16 @@ Benötigt wird **Spotify Premium** und ein Desktop-Browser (Chrome, Edge oder Fi
 3. Die **Client ID** kopieren (ein Client Secret wird nicht gebraucht).
 4. Die Show öffnen → ⚙️ → Client-ID einfügen → **„Bei Spotify anmelden“**.
 
+## Fertiger Ablauf
+
+Die Show ist auf die Datei **„01 - Lichterkinder.mp3“** (Album „Laternen- und Herbstlieder“, 4:01) abgestimmt:
+80 BPM, erster Schlag bei 3,33 s; alle Explosionen liegen auf dem Takt. Abschnitte (aus der Audio-Analyse):
+Strophe 0:03 · Refrain 0:27 · Rap 0:50 · Refrain 1:15 · Rap 1:41 · Refrain 2:03 · Zwischenteil 2:27 (St. Martin, Frieren)
+· Steigerung 2:51 · kurze Pause 3:15 · **Lichterkinder-Finale 3:18** · Ausklang 3:42.
+
+Die Musikdatei liegt **nicht** im Repository. Beim ersten Start „Eigene Musikdatei“ wählen und die gekaufte Datei auswählen –
+der Browser merkt sie sich. Unter „3. Feinschliff“ lässt sich mit „Fertigen Ablauf laden“ jederzeit zurücksetzen.
+
 ## Mitsing-Text und Effekte
 
 Spotify gibt Liedtexte nicht über seine Schnittstelle heraus, deshalb wird der Text einmalig selbst eingegeben.

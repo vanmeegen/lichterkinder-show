@@ -1,5 +1,5 @@
 // Editor: Text einfügen, beim Abspielen Zeilen und Effekte mittippen, Zeiten feinjustieren.
-import { Sheet, CueType, CUE_LABEL, saveSheet, emptySheet, fmtTime } from './cues';
+import { Sheet, CueType, CUE_LABEL, saveSheet, emptySheet, fmtTime, defaultCues, SONG_BPM, SONG_OFFSET, SONG_END } from './cues';
 
 const KEYMAP: Record<string, CueType> = {
   r: 'refrain', v: 'strophe', p: 'ruhig', y: 'rap', m: 'martin', f: 'frieren', h: 'herz', l: 'lichter', s: 'stern', n: 'schnee', g: 'glocken', k: 'lichterkinder',
@@ -53,6 +53,12 @@ export class Editor {
       try { const s = JSON.parse(await f.text()); if (!Array.isArray(s.lines)) throw 0; this.changed({ bpm: 100, ...s }); this.toast('Ablauf geladen ✔'); }
       catch { this.toast('Datei konnte nicht gelesen werden'); }
       file.value = '';
+    };
+    document.getElementById('ed-default')!.onclick = () => {
+      if (confirm('Effekte und Abschnitte auf den fertigen Ablauf für das Lied zurücksetzen? (Der Text bleibt.)')) {
+        this.changed({ ...this.sheet(), cues: defaultCues(), bpm: SONG_BPM, offset: SONG_OFFSET, end: SONG_END });
+        this.toast('Fertiger Ablauf geladen ✔');
+      }
     };
     document.getElementById('ed-clear')!.onclick = () => {
       if (confirm('Text und alle Markierungen löschen?')) { this.changed(emptySheet()); ta.value = ''; }
