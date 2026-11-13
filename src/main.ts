@@ -4,7 +4,7 @@ import { Lyrics } from './lyrics';
 import { Editor } from './editor';
 import { Clock, CountdownClock, SpotifyClock, FileClock, storeAudio, loadAudio } from './clock';
 import { SpotifyPlayer, handleRedirect, login, logout, isLoggedIn, getClientId, setClientId, redirectUri } from './spotify';
-import { loadSheet, saveSheet, Sheet, sectionsOf, effectCues, fmtTime, SONG_DURATION, Cue } from './cues';
+import { loadSheet, saveSheet, Sheet, sectionsOf, effectCues, fmtTime, SONG_DURATION, Cue, setSongDuration, trackUri, setTrack } from './cues';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 
@@ -56,6 +56,9 @@ function toast(s: string, ms = 2200) {
 }
 function status(s: string) { $('status').textContent = s; }
 sp.onStatus = status;
+const onDuration = (d: number) => { if (setSongDuration(d)) sheetChanged(); };
+sp.onDuration = onDuration;
+fileClock.onDuration = onDuration;
 
 const songTime = () => clock.time() - latency / 1000;
 
@@ -100,6 +103,7 @@ function syncSettingsUi() {
   $('demo-box').style.display = source === 'demo' ? '' : 'none';
   $('file-name').textContent = fileClock.name ? '🎵 ' + fileClock.name : 'Noch keine Datei gewählt.';
   ($('set-client') as HTMLInputElement).value = getClientId();
+  ($('set-track') as HTMLInputElement).value = 'https://open.spotify.com/track/' + trackUri().split(':')[2];
   $('redirect-uri').textContent = redirectUri();
   ($('set-latency') as HTMLInputElement).value = String(latency); $('lat-val').textContent = String(latency);
   ($('set-bpm') as HTMLInputElement).value = String(sheet.bpm); $('bpm-val').textContent = String(sheet.bpm);
@@ -122,6 +126,11 @@ document.querySelectorAll<HTMLButtonElement>('#chooser button').forEach(b => b.o
   if (ready()) startOrToggle();
 });
 $('chooser').onclick = e => { if (e.target === $('chooser')) $('chooser').classList.add('hidden'); };
+$('set-track').onchange = () => {
+  const uri = setTrack(($('set-track') as HTMLInputElement).value);
+  toast(uri ? 'Lied gespeichert ✔' : 'Das ist kein Spotify-Lied-Link');
+  syncSettingsUi(); started = false;
+};
 $('set-client').onchange = () => setClientId(($('set-client') as HTMLInputElement).value);
 $('btn-login').onclick = () => { setClientId(($('set-client') as HTMLInputElement).value); login().catch(e => toast(e.message)); };
 $('btn-logout').onclick = () => { logout(); syncSettingsUi(); toast('Abgemeldet'); };

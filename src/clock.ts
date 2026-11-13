@@ -31,7 +31,8 @@ export class SpotifyClock implements Clock {
 export class FileClock implements Clock {
   audio = new Audio();
   name = '';
-  constructor() { this.audio.preload = 'auto'; }
+  onDuration: (d: number) => void = () => {};
+  constructor() { this.audio.preload = 'auto'; this.audio.addEventListener('loadedmetadata', () => this.onDuration(this.audio.duration)); }
   setFile(blob: Blob, name: string) { this.audio.src = URL.createObjectURL(blob); this.name = name; }
   hasFile() { return !!this.audio.src; }
   time() { return this.audio.currentTime; }

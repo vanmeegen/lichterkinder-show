@@ -1,7 +1,21 @@
 // Datenmodell: Textzeilen + Effekt-Marker. Liegt nur im Browser (localStorage) bzw. in einer Export-Datei.
 
-export const TRACK_URI = 'spotify:track:7CWo5QLZYtAPLwHrquNErG';
-export const SONG_DURATION = 193.375;
+// Standard: die vom Nutzer gewählte Version. Über ⚙️ änderbar (Spotify-Link einfügen).
+export const DEFAULT_TRACK = 'spotify:track:0iLyAlInsomkzvxAMYlS6R';
+export function trackUri(): string { return localStorage.getItem('lk-track') || DEFAULT_TRACK; }
+export function setTrack(linkOrUri: string): string | null {
+  const m = linkOrUri.match(/track[/:]([A-Za-z0-9]{22})/);
+  if (!m) return null;
+  const uri = 'spotify:track:' + m[1];
+  localStorage.setItem('lk-track', uri);
+  return uri;
+}
+/** Länge des Liedes; wird vom Player (Spotify bzw. Datei) automatisch aktualisiert. */
+export let SONG_DURATION = +(localStorage.getItem('lk-duration') || 193.4);
+export function setSongDuration(d: number): boolean {
+  if (!(d > 10) || Math.abs(d - SONG_DURATION) < 0.3) return false;
+  SONG_DURATION = d; localStorage.setItem('lk-duration', String(d)); return true;
+}
 
 export type CueType =
   | 'herz' | 'lichter' | 'stern' | 'schnee' | 'glocken' | 'lichterkinder'

@@ -1,5 +1,5 @@
 // Spotify: Anmeldung (PKCE, ohne Geheimnis) + Web Playback SDK (der Browser wird selbst zum Player).
-import { TRACK_URI } from './cues';
+import { trackUri } from './cues';
 
 const SCOPES = 'streaming user-read-email user-read-private user-read-playback-state user-modify-playback-state';
 const LS = { client: 'lk-client-id', verifier: 'lk-pkce', token: 'lk-token' };
@@ -108,6 +108,7 @@ export class SpotifyPlayer {
   private paused = true;
   private started = false;
   onStatus: (s: string) => void = () => {};
+  onDuration: (d: number) => void = () => {};
 
   async init() {
     if (this.player) return;
@@ -131,6 +132,7 @@ export class SpotifyPlayer {
 
   private applyState(st: any) {
     if (!st) return;
+    if (st.duration) this.onDuration(st.duration / 1000);
     const pos = st.position / 1000;
     const predicted = this.time();
     this.paused = st.paused;
@@ -150,12 +152,12 @@ export class SpotifyPlayer {
     await this.init();
     try { await this.player.activateElement(); } catch { /* nur für manche Browser nötig */ }
     try {
-      await api(`/me/player/play?device_id=${this.deviceId}`, 'PUT', { uris: [TRACK_URI], position_ms: Math.round(sec * 1000) });
+      await api(`/me/player/play?device_id=${this.deviceId}`, 'PUT', { uris: [trackUri()], position_ms: Math.round(sec * 1000) });
     } catch (e: any) {
       if (e.status === 404) {
         await api('/me/player', 'PUT', { device_ids: [this.deviceId], play: false });
         await new Promise(r => setTimeout(r, 600));
-        await api(`/me/player/play?device_id=${this.deviceId}`, 'PUT', { uris: [TRACK_URI], position_ms: Math.round(sec * 1000) });
+        await api(`/me/player/play?device_id=${this.deviceId}`, 'PUT', { uris: [trackUri()], position_ms: Math.round(sec * 1000) });
       } else throw e;
     }
     this.started = true;
