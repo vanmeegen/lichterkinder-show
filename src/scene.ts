@@ -222,6 +222,15 @@ export class Stage {
     const g = new THREE.ExtrudeGeometry(sh, { depth: 0.2, bevelEnabled: false }); g.center(); return g;
   }
 
+  /** Sichtfeld so wählen, dass die Breite einer 16:9-Ansicht immer ganz zu sehen ist.
+   *  Schmalere/quadratische Bildschirme zeigen dafür mehr Himmel und Boden statt seitlich abzuschneiden. */
+  baseFov() {
+    const aspect = this.camera.aspect, ref = 16 / 9, base = 50;
+    if (aspect >= ref) return base;
+    const half = Math.atan(Math.tan(THREE.MathUtils.degToRad(base / 2)) * ref / aspect);
+    return Math.min(100, THREE.MathUtils.radToDeg(half * 2));
+  }
+
   resize() {
     const w = innerWidth, h = innerHeight;
     this.renderer.setSize(w, h, false);
@@ -270,11 +279,12 @@ export class Stage {
     // Kamera
     const lk = m.since.lichterkinder ?? 99;
     const zoom = lk < 8 ? Math.sin(Math.min(1, lk / 1.2) * Math.PI / 2) * Math.min(1, (8 - lk) / 3) : 0;
-    this.camera.fov = 50 - 5 * zoom;
+    this.camera.fov = this.baseFov() * (1 - 0.1 * zoom);
     this.camera.updateProjectionMatrix();
     const sh = Math.min(1.5, f.shake);
     this.camera.position.set(Math.sin(t * 0.13) * 0.9 + (Math.random() - 0.5) * 0.12 * sh, 2.4 + Math.sin(t * 0.21) * 0.15 + (Math.random() - 0.5) * 0.1 * sh, 17);
-    this.camera.lookAt(Math.sin(t * 0.09) * 1.5, 6.6 + 1.5 * zoom, -20);
+    const tall = Math.max(0, (16 / 9) / this.camera.aspect - 1); // schmalere Bildschirme: Blick etwas höher, Kinder rücken nach unten
+    this.camera.lookAt(Math.sin(t * 0.09) * 1.5, 6.0 + Math.min(2.5, 1.6 * tall) + 1.5 * zoom, -20);
     this.bloom.strength = 0.65 + 0.15 * m.energy + 0.15 * zoom;
 
     this.composer.render();

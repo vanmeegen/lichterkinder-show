@@ -312,12 +312,12 @@ export class Kids {
       const nSlots = Math.max(1, Math.round(m.rapBeats / 16));
       const slotBeats = m.rapBeats / nSlots;
       const slot = Math.min(nSlots - 1, Math.floor(m.rapBeat / slotBeats)), fb = m.rapBeat - slot * slotBeats;
-      const count = m.rapNo === m.rapCount - 1 ? 3 : 1;
+      const count = m.rapNo === m.rapCount - 1 ? 3 : 2;
       const WALK = 1.5;
       const p = ss(fb / WALK) * (1 - ss((fb - (slotBeats - WALK)) / WALK));
       const u = (fb - WALK) / Math.max(1, slotBeats - 2 * WALK);
       const walk = fb < WALK ? 1 - fb / WALK : fb > slotBeats - WALK ? (fb - (slotBeats - WALK)) / WALK : 0;
-      const stage = count === 1 ? [[0, 8.7]] : [[-2.7, 8.45], [0, 8.85], [2.7, 8.45]];
+      const stage = count === 2 ? [[-2.0, 7.4], [2.0, 7.4]] : [[-3.0, 7.2], [0, 7.6], [3.0, 7.2]];
       soloPlan(m.rapNo, slot, count, n).forEach((pl, j) => solos.set(pl.kid, { routine: pl.routine, p, u, walk, sx: stage[j][0], sz: stage[j][1], spot: j }));
     }
     for (const sp of this.spots) { sp.disc.visible = sp.beam.visible = false; }
@@ -360,7 +360,7 @@ export class Kids {
 
       // ---------- Rap: alle exakt gleichzeitig, weicher Groove ----------
       const rp = m.rap;
-      let spinnerRx = 0, spinnerRz = 0, extraSpin = 0;
+      let spinnerRx = 0, spinnerRz = 0, extraSpin = 0, liftL = 0, liftR = 0, spread = 0;
       if (rp > 0) {
         const bump = 0.5 + 0.5 * Math.cos(2 * Math.PI * beat);
         const sway = Math.sin(Math.PI * beat / 2);
@@ -370,7 +370,7 @@ export class Kids {
         bodyRz = lerp(bodyRz, 0.09 * sway, rp);
         rotY = lerp(rotY, 0.22 * sway, rp);                                  // lässig mitdrehen
         x += 0.2 * sway * rp;                                                // Seitschritt im Takt
-        zPos -= 1.1 * rp;                                                    // Reihe tritt zurück, Bühne frei für Solisten
+        zPos -= 2.0 * rp;                                                    // Reihe tritt zurück, Bühne frei für Solisten
         pose = mixPose(pose, this.rapPose(m.rapBeat, k.idx), rp);
 
         const so = solos.get(k.idx);
@@ -383,6 +383,7 @@ export class Kids {
           bodyRx = lerp(bodyRx, r.rx ?? 0, w); bodyRz = lerp(bodyRz, r.rz ?? 0, w);
           rotY = lerp(rotY, r.ry ?? 0, w); squash = lerp(squash, r.squash ?? 1, w);
           spinnerRx = (r.srx ?? 0) * w; spinnerRz = (r.srz ?? 0) * w;
+          liftL = (r.legL ?? 0) * w; liftR = (r.legR ?? 0) * w; spread = (r.spread ?? 0) * w;
           extraSpin = (r.spin ?? 0) * (so.walk > 0 ? 0 : 1);
           const sp = this.spots[so.spot];
           sp.disc.visible = sp.beam.visible = true;
@@ -398,8 +399,9 @@ export class Kids {
       k.spinner.rotation.set(spinnerRx, 0, spinnerRz);
       k.body.rotation.set(bodyRx, spin, bodyRz);
       k.body.scale.set(1 / Math.sqrt(squash), squash, 1 / Math.sqrt(squash));
-      k.legL.position.y = 0.2 + 0.05 * Math.max(0, Math.sin(Math.PI * beat)) * (1 - rp);
-      k.legR.position.y = 0.2 + 0.05 * Math.max(0, -Math.sin(Math.PI * beat)) * (1 - rp);
+      k.legL.position.set(-0.18 - 0.22 * spread, 0.2 + 0.05 * Math.max(0, Math.sin(Math.PI * beat)) * (1 - rp) + 0.2 * liftL, 0.14 * liftL);
+      k.legR.position.set(0.18 + 0.22 * spread, 0.2 + 0.05 * Math.max(0, -Math.sin(Math.PI * beat)) * (1 - rp) + 0.2 * liftR, 0.14 * liftR);
+      k.legL.rotation.set(-0.9 * liftL, 0, -0.6 * spread); k.legR.rotation.set(-0.9 * liftR, 0, 0.6 * spread);
       k.shL.rotation.set(pose.L.sx, 0, pose.L.sz); k.elL.rotation.set(pose.L.ex, 0, pose.L.ez);
       k.shR.rotation.set(pose.R.sx, 0, pose.R.sz); k.elR.rotation.set(pose.R.ex, 0, pose.R.ez);
 
