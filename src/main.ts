@@ -235,7 +235,7 @@ function mood(t: number) {
   // weicher Übergang 1,5 s
   const prev = sections[sections.indexOf(sec) - 1];
   const pv = prev ? lvl(prev.kind) : target;
-  const rapIn = sec.kind === 'rap' ? Math.min(1, (t - sec.t0) / 0.5, (sec.t1 - t) / 0.5) : 0;
+  const rapIn = sec.kind === 'rap' ? Math.min(1, (t - sec.t0) / 0.12, (sec.t1 - t) / 0.4) : 0;
   const k = Math.min(1, (t - sec.t0) / 1.5);
   const energy = pv + (target - pv) * k;
   const since: Record<string, number> = {};

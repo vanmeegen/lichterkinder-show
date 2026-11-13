@@ -40,8 +40,8 @@ export const SONG_BPM = 80, SONG_OFFSET = 3.275, SONG_END = 235.5;
 const SHIFT = -0.06;
 export function defaultCues(): Cue[] {
   const sec: Cue[] = [
-    { t: 0, type: 'ruhig' }, { t: 3.33, type: 'strophe' }, { t: 27.33, type: 'refrain' }, { t: 49.83, type: 'rap' },
-    { t: 75.33, type: 'refrain' }, { t: 100.83, type: 'rap' }, { t: 123.33, type: 'refrain' }, { t: 147.33, type: 'strophe' },
+    { t: 0, type: 'ruhig' }, { t: 3.33, type: 'strophe' }, { t: 27.33, type: 'refrain' }, { t: 49.08, type: 'rap' },
+    { t: 75.33, type: 'refrain' }, { t: 100.08, type: 'rap' }, { t: 123.33, type: 'refrain' }, { t: 146.58, type: 'rap' },
     { t: 171.33, type: 'refrain' }, { t: 195.33, type: 'ruhig' }, { t: 198.33, type: 'refrain' }, { t: 222.33, type: 'strophe' },
     { t: 228.33, type: 'ruhig' },
   ];
@@ -89,7 +89,7 @@ export function loadSheet(): Sheet {
     const s = JSON.parse(localStorage.getItem(KEY) || 'null');
     if (s && Array.isArray(s.lines) && Array.isArray(s.cues)) {
       // leer oder noch der ältere Standard-Ablauf → aktuellen Standard nehmen
-      const oldDefault = s.cues.some((c: Cue) => c.type === 'martin' && [148.83, 33.33, 67.83].some(v => Math.abs(c.t - v) < 0.01));
+      const oldDefault = s.cues.some((c: Cue) => (c.type === 'martin' && [148.83, 33.33, 67.83].some(v => Math.abs(c.t - v) < 0.01)) || (c.type === 'rap' && Math.abs(c.t - 49.77) < 0.01));
       if (oldDefault && s.lines.length === TEXT_LINE_COUNT + 8 && Math.abs((s.lines[0].t ?? 0) - 2.93) < 0.01) s.lines = autoTimeLines(s.lines.slice(0, TEXT_LINE_COUNT).map((l: Line) => l.text).join('\n')).lines;
       if (!s.cues.length || oldDefault) { s.cues = defaultCues(); s.bpm = SONG_BPM; s.offset = SONG_OFFSET; s.end = SONG_END; }
       return { bpm: SONG_BPM, offset: SONG_OFFSET, end: SONG_END, ...s };
