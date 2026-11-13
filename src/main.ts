@@ -11,7 +11,7 @@ const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getEleme
 // ---------- Zustand ----------
 let sheet: Sheet = loadSheet();
 const prefs = JSON.parse(localStorage.getItem('lk-prefs') || '{}');
-let latency: number = prefs.latency ?? 150;
+let latency: number = prefs.latency ?? 0;
 type Source = 'spotify' | 'file' | 'demo';
 let source: Source = prefs.source ?? 'file';
 let chosen: boolean = !!prefs.source;
@@ -42,6 +42,7 @@ function sheetChanged() {
     stage.kids.martinTimes = effects.filter(c => c.type === 'martin').map(c => c.t);
     buildFrostEmojis();
     lyrics.reset();
+    paintSeekBar();
   }, 250);
 }
 stage.fireworks.rebuild(sheet);
@@ -105,7 +106,6 @@ function syncSettingsUi() {
   ($('set-client') as HTMLInputElement).value = getClientId();
   ($('set-track') as HTMLInputElement).value = 'https://open.spotify.com/track/' + trackUri().split(':')[2];
   $('redirect-uri').textContent = redirectUri();
-  ($('set-latency') as HTMLInputElement).value = String(latency); $('lat-val').textContent = String(latency);
   ($('set-bpm') as HTMLInputElement).value = String(sheet.bpm); $('bpm-val').textContent = String(sheet.bpm);
   ($('set-lyrics') as HTMLInputElement).checked = showLyrics;
   $('btn-login').textContent = isLoggedIn() ? 'Neu anmelden' : 'Bei Spotify anmelden';
@@ -140,7 +140,34 @@ $('set-track').onchange = () => {
 $('set-client').onchange = () => setClientId(($('set-client') as HTMLInputElement).value);
 $('btn-login').onclick = () => { setClientId(($('set-client') as HTMLInputElement).value); login().catch(e => toast(e.message)); };
 $('btn-logout').onclick = () => { logout(); syncSettingsUi(); toast('Abgemeldet'); };
-$('set-latency').oninput = () => { latency = +($('set-latency') as HTMLInputElement).value; $('lat-val').textContent = String(latency); savePrefs(); };
+function setLatency(v: number) {
+  latency = Math.max(-400, Math.min(600, Math.round(v / 10) * 10));
+  ($('sync-range') as HTMLInputElement).value = String(latency);
+  $('sync-val').textContent = (latency > 0 ? '+' : '') + latency + ' ms';
+  savePrefs();
+}
+$('set-latency').oninput = () => setLatency(+($('set-latency') as HTMLInputElement).value);
+$('sync-range').oninput = () => setLatency(+($('sync-range') as HTMLInputElement).value);
+$('sync-minus').onclick = e => { e.preventDefault(); setLatency(latency - 20); };
+$('sync-plus').onclick = e => { e.preventDefault(); setLatency(latency + 20); };
+setLatency(latency);
+
+// Zeitleiste zum Springen
+let seeking = false;
+const seekEl = $('seek') as HTMLInputElement;
+seekEl.oninput = () => { seeking = true; $('time').textContent = `${fmtTime(+seekEl.value)} / ${fmtTime(SONG_DURATION)}`; };
+seekEl.onchange = async () => {
+  const v = +seekEl.value; seeking = false;
+  if (!started) { if (!ready()) return; started = true; }
+  await clock.seek(v + latency / 1000);
+};
+function paintSeekBar() {
+  const col: Record<string, string> = { refrain: '#c2410c', rap: '#7c3aed', strophe: '#1d4ed8', ruhig: '#334155' };
+  const stops = sections.map(s => `${col[s.kind]} ${(s.t0 / SONG_DURATION) * 100}% ${(Math.min(s.t1, SONG_DURATION) / SONG_DURATION) * 100}%`).join(', ');
+  seekEl.style.setProperty('--seek-bg', `linear-gradient(90deg, ${stops})`);
+  seekEl.max = String(SONG_DURATION);
+}
+paintSeekBar();
 $('set-bpm').oninput = () => { sheet = { ...sheet, bpm: +($('set-bpm') as HTMLInputElement).value }; $('bpm-val').textContent = String(sheet.bpm); saveSheet(sheet); };
 $('set-lyrics').onchange = () => { showLyrics = ($('set-lyrics') as HTMLInputElement).checked; lyrics.visible = showLyrics; savePrefs(); };
 
@@ -159,6 +186,8 @@ addEventListener('keydown', e => {
   else if (e.key === 'f' || e.key === 'F') toggleFull();
   else if (e.key === 'ArrowRight') clock.seek(clock.time() + 5);
   else if (e.key === 'ArrowLeft') clock.seek(Math.max(0, clock.time() - 5));
+  else if (e.key === '[') setLatency(latency - 20);
+  else if (e.key === ']') setLatency(latency + 20);
 });
 
 let lastMove = performance.now();
@@ -211,7 +240,8 @@ function mood(t: number) {
   const energy = pv + (target - pv) * k;
   const since: Record<string, number> = {};
   for (const c of effects) if (c.t <= t) since[c.type] = t - c.t;
-  return { t, beat: ((t - (sheet.offset ?? 0)) * sheet.bpm) / 60, energy, rap: Math.max(0, rapIn), since };
+  const rapT = sec.kind === 'rap' ? t - sec.t0 : -1, rapLen = sec.kind === 'rap' ? Math.min(sec.t1, SONG_DURATION) - sec.t0 : 0;
+  return { t, beat: ((t - (sheet.offset ?? 0)) * sheet.bpm) / 60, energy, rap: Math.max(0, rapIn), rapT, rapLen, since };
 }
 
 function frame() {
@@ -224,7 +254,7 @@ function frame() {
 
   lyrics.update(sheet, t);
   $('title-card').classList.toggle('hide', started && t > 9);
-  $('time').textContent = `${fmtTime(t)} / ${fmtTime(SONG_DURATION)}`;
+  if (!seeking) { $('time').textContent = `${fmtTime(t)} / ${fmtTime(SONG_DURATION)}`; seekEl.value = String(t); }
   $('btn-play').textContent = clock.playing() ? '⏸ Pause' : '▶ Start';
   const cd = source === 'demo' ? demo.countdownUntil : 0;
   const cdEl = $('countdown');

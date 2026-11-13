@@ -35,7 +35,9 @@ const KEY = 'lk-sheet-v1';
 
 // Aus der Audio-Analyse der Datei „01 - Lichterkinder.mp3“ (Album „Laternen- und Herbstlieder“, 4:01):
 // konstant 80 BPM, erster Schlag bei 3,334 s, Abschnitte auf dem Taktraster, Musik endet ~3:55.
-export const SONG_BPM = 80, SONG_OFFSET = 3.334, SONG_END = 235.5;
+// Feinanalyse auf die Bassdrum: Raster 60 ms früher als die erste Schätzung.
+export const SONG_BPM = 80, SONG_OFFSET = 3.275, SONG_END = 235.5;
+const SHIFT = -0.06;
 export function defaultCues(): Cue[] {
   const sec: Cue[] = [
     { t: 0, type: 'ruhig' }, { t: 3.33, type: 'strophe' }, { t: 27.33, type: 'refrain' }, { t: 49.83, type: 'rap' },
@@ -55,7 +57,7 @@ export function defaultCues(): Cue[] {
   fx.push({ t: 100.83, type: 'schnee' }, { t: 112.83, type: 'lichter' }, { t: 115.83, type: 'martin' }, { t: 118.83, type: 'herz' }, { t: 121.83, type: 'lichter' });
   // Schlussstrophe: Laternen und Lichter, Sterne, dunkel und kalt
   fx.push({ t: 147.33, type: 'lichter' }, { t: 153.33, type: 'stern' }, { t: 159.33, type: 'schnee' });
-  return [...sec, ...fx];
+  return [...sec, ...fx].map(c => ({ ...c, t: c.t === 0 ? 0 : Math.round((c.t + SHIFT) * 100) / 100 }));
 }
 
 /** Zeitplan der Textzeilen (nur Zeiten, kein Text): passt auf den Liedtext mit 36 Zeilen
@@ -76,8 +78,8 @@ const LEAD = 0.4; // Zeile etwas vor dem Einsatz zeigen
 export function autoTimeLines(raw: string): { lines: Line[]; matched: boolean } {
   const texts = raw.split('\n').map(s => s.trim()).filter(s => s && !/songtext/i.test(s) && !/^[a-z]+_[a-z_]+$/i.test(s));
   if (texts.length !== LINE_TIMES.length) return { lines: texts.map(text => ({ text, t: null })), matched: false };
-  const lines: Line[] = texts.map((text, i) => ({ text, t: Math.round((LINE_TIMES[i] - LEAD) * 100) / 100 }));
-  for (const r of REPEAT_REFRAIN_AT) for (let k = 0; k < 4; k++) lines.push({ text: texts[k], t: Math.round((r + 6 * k - LEAD) * 100) / 100 });
+  const lines: Line[] = texts.map((text, i) => ({ text, t: Math.round((LINE_TIMES[i] + SHIFT - LEAD) * 100) / 100 }));
+  for (const r of REPEAT_REFRAIN_AT) for (let k = 0; k < 4; k++) lines.push({ text: texts[k], t: Math.round((r + 6 * k + SHIFT - LEAD) * 100) / 100 });
   return { lines, matched: true };
 }
 export function emptySheet(): Sheet { return { lines: [], cues: defaultCues(), bpm: SONG_BPM, offset: SONG_OFFSET, end: SONG_END }; }
@@ -87,7 +89,8 @@ export function loadSheet(): Sheet {
     const s = JSON.parse(localStorage.getItem(KEY) || 'null');
     if (s && Array.isArray(s.lines) && Array.isArray(s.cues)) {
       // leer oder noch der ältere Standard-Ablauf → aktuellen Standard nehmen
-      const oldDefault = s.cues.some((c: Cue) => c.type === 'martin' && (Math.abs(c.t - 148.83) < 0.01 || Math.abs(c.t - 33.33) < 0.01));
+      const oldDefault = s.cues.some((c: Cue) => c.type === 'martin' && [148.83, 33.33, 67.83].some(v => Math.abs(c.t - v) < 0.01));
+      if (oldDefault && s.lines.length === TEXT_LINE_COUNT + 8 && Math.abs((s.lines[0].t ?? 0) - 2.93) < 0.01) s.lines = autoTimeLines(s.lines.slice(0, TEXT_LINE_COUNT).map((l: Line) => l.text).join('\n')).lines;
       if (!s.cues.length || oldDefault) { s.cues = defaultCues(); s.bpm = SONG_BPM; s.offset = SONG_OFFSET; s.end = SONG_END; }
       return { bpm: SONG_BPM, offset: SONG_OFFSET, end: SONG_END, ...s };
     }

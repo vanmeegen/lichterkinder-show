@@ -20,14 +20,18 @@
   </div>
 
   <div id="toolbar">
+    <div id="seekrow"><input id="seek" type="range" min="0" max="241" step="0.1" value="0" /></div>
+    <div id="btnrow">
     <button id="btn-play" title="Start / Pause (Leertaste)">▶ Start</button>
     <button id="btn-restart" title="Von vorn">⏮</button>
     <span id="time">0:00</span>
     <span id="status"></span>
     <span class="spacer"></span>
+    <label id="sync" title="Bild gegenüber Musik verschieben ( [ und ] )">⏱ <button id="sync-minus">−</button><input id="sync-range" type="range" min="-400" max="600" step="10" /><button id="sync-plus">+</button><b id="sync-val">0 ms</b></label>
     <button id="btn-editor">✏️ Text &amp; Effekte</button>
     <button id="btn-settings">⚙️</button>
     <button id="btn-full" title="Vollbild (F)">⛶</button>
+    </div>
   </div>
 
   <div id="settings" class="panel hidden">
@@ -58,7 +62,7 @@
     </div>
     <div id="demo-box"><p class="hint">Die Show startet mit einem Countdown 3 – 2 – 1. Bei „Los!“ die Musik am anderen Gerät starten.</p></div>
     <label>Verzögerung (Bluetooth): <b id="lat-val">0</b> ms
-      <input id="set-latency" type="range" min="0" max="600" step="10" value="0" />
+      <input id="set-latency" type="range" min="-400" max="600" step="10" value="0" />
     </label>
     <p class="hint">Schiebt die Bilder nach hinten, bis Knall und Musik zusammenpassen.</p>
     <label>Tempo (BPM) für das Wippen: <b id="bpm-val">100</b>
