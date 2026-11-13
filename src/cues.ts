@@ -43,15 +43,42 @@ export function defaultCues(): Cue[] {
     { t: 171.33, type: 'refrain' }, { t: 195.33, type: 'ruhig' }, { t: 198.33, type: 'refrain' }, { t: 222.33, type: 'strophe' },
     { t: 228.33, type: 'ruhig' },
   ];
-  // Refrain: beginnt mit „Lichterkinder“, dann Sterne, St. Martin, Herzen – je ein Takt (3 s), zweimal.
   const fx: Cue[] = [];
-  for (const r of [27.33, 75.33, 123.33, 198.33]) {
-    fx.push({ t: r, type: 'lichterkinder' }, { t: r + 3, type: 'stern' }, { t: r + 6, type: 'martin' }, { t: r + 9, type: 'herz' },
-      { t: r + 12, type: 'lichter' }, { t: r + 15, type: 'stern' }, { t: r + 21, type: 'herz' });
+  // Refrain (4 Zeilen à 2 Takte): Lichterkinder → Sterne → Freude (goldene Glocken) → Herzen
+  for (const r of [27.33, 75.33, 123.33, 171.33, 198.33]) {
+    fx.push({ t: r, type: 'lichterkinder' }, { t: r + 6, type: 'stern' }, { t: r + 12, type: 'glocken' }, { t: r + 18, type: 'herz' });
   }
-  fx.push({ t: 171.33, type: 'lichter' }, { t: 183.33, type: 'glocken' }, { t: 15.33, type: 'lichter' },
-    { t: 150.33, type: 'schnee' }, { t: 160.83, type: 'frieren' });
+  fx.push({ t: 3.33, type: 'lichter' }, { t: 9.33, type: 'stern' }, { t: 21.33, type: 'herz' });
+  // Rap 1 (8 Zeilen à 1 Takt): kalte Nacht, Ritt durch den Schnee, „ich friere“, Mantel teilen, für beide gereicht
+  fx.push({ t: 49.83, type: 'schnee' }, { t: 55.83, type: 'schnee' }, { t: 64.83, type: 'frieren' }, { t: 67.83, type: 'martin' }, { t: 70.83, type: 'herz' });
+  // Rap 2: kalte Nacht, Licht anzünden, teilen wie Sankt Martin, Lächeln, Lichter zeigen
+  fx.push({ t: 100.83, type: 'schnee' }, { t: 112.83, type: 'lichter' }, { t: 115.83, type: 'martin' }, { t: 118.83, type: 'herz' }, { t: 121.83, type: 'lichter' });
+  // Schlussstrophe: Laternen und Lichter, Sterne, dunkel und kalt
+  fx.push({ t: 147.33, type: 'lichter' }, { t: 153.33, type: 'stern' }, { t: 159.33, type: 'schnee' });
   return [...sec, ...fx];
+}
+
+/** Zeitplan der Textzeilen (nur Zeiten, kein Text): passt auf den Liedtext mit 36 Zeilen
+ *  (Refrain 2×, Rap 1, Refrain, Rap 2, Refrain, Schlussstrophe). Wiederholte Refrains am Ende werden ergänzt. */
+const LINE_TIMES: number[] = [
+  ...[0, 6, 12, 18].map(d => 3.33 + d), ...[0, 6, 12, 18].map(d => 27.33 + d),
+  ...Array.from({ length: 8 }, (_, i) => 49.83 + 3 * i),
+  ...[0, 6, 12, 18].map(d => 75.33 + d),
+  ...Array.from({ length: 8 }, (_, i) => 100.83 + 3 * i),
+  ...[0, 6, 12, 18].map(d => 123.33 + d),
+  ...[0, 6, 12, 18].map(d => 147.33 + d),
+];
+const REPEAT_REFRAIN_AT = [171.33, 198.33];
+export const TEXT_LINE_COUNT = LINE_TIMES.length;
+const LEAD = 0.4; // Zeile etwas vor dem Einsatz zeigen
+
+/** Text in Zeilen zerlegen (Überschriften/Störzeilen weg) und – wenn er zum Lied passt – automatisch timen. */
+export function autoTimeLines(raw: string): { lines: Line[]; matched: boolean } {
+  const texts = raw.split('\n').map(s => s.trim()).filter(s => s && !/songtext/i.test(s) && !/^[a-z]+_[a-z_]+$/i.test(s));
+  if (texts.length !== LINE_TIMES.length) return { lines: texts.map(text => ({ text, t: null })), matched: false };
+  const lines: Line[] = texts.map((text, i) => ({ text, t: Math.round((LINE_TIMES[i] - LEAD) * 100) / 100 }));
+  for (const r of REPEAT_REFRAIN_AT) for (let k = 0; k < 4; k++) lines.push({ text: texts[k], t: Math.round((r + 6 * k - LEAD) * 100) / 100 });
+  return { lines, matched: true };
 }
 export function emptySheet(): Sheet { return { lines: [], cues: defaultCues(), bpm: SONG_BPM, offset: SONG_OFFSET, end: SONG_END }; }
 
@@ -60,7 +87,7 @@ export function loadSheet(): Sheet {
     const s = JSON.parse(localStorage.getItem(KEY) || 'null');
     if (s && Array.isArray(s.lines) && Array.isArray(s.cues)) {
       // leer oder noch der ältere Standard-Ablauf → aktuellen Standard nehmen
-      const oldDefault = s.cues.some((c: Cue) => c.type === 'martin' && Math.abs(c.t - 148.83) < 0.01);
+      const oldDefault = s.cues.some((c: Cue) => c.type === 'martin' && (Math.abs(c.t - 148.83) < 0.01 || Math.abs(c.t - 33.33) < 0.01));
       if (!s.cues.length || oldDefault) { s.cues = defaultCues(); s.bpm = SONG_BPM; s.offset = SONG_OFFSET; s.end = SONG_END; }
       return { bpm: SONG_BPM, offset: SONG_OFFSET, end: SONG_END, ...s };
     }
@@ -114,7 +141,7 @@ export function effectCues(sheet: Sheet): Cue[] {
       if (k && k !== 'weihnacht') auto.push({ t: l.t + dur * (wi / Math.max(1, words.length)) + 0.1, type: k });
     });
   });
-  let all = [...fx, ...auto];
+  let all = fx.length ? [...fx] : [...fx, ...auto]; // eigene/fertige Effekte haben Vorrang vor Stichwörtern
   if (!sheet.cues.length && !timed.length) all = defaultCues().filter(c => !['refrain', 'strophe', 'ruhig', 'rap'].includes(c.type));
   all.sort((a, b) => a.t - b.t);
   // gleichartige Effekte innerhalb von 2,5 s zusammenfassen

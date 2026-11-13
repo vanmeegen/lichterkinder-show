@@ -35,7 +35,8 @@ der Browser merkt sie sich. Unter „3. Feinschliff“ lässt sich mit „Fertig
 Spotify gibt Liedtexte nicht über seine Schnittstelle heraus, deshalb wird der Text einmalig selbst eingegeben.
 Er bleibt **nur im Browser** (und optional in einer selbst gesicherten Datei) – bitte nicht ins Repository legen.
 
-1. **✏️ Text & Effekte → 1. Text:** Text einfügen, eine Mitsing-Zeile pro Zeile.
+1. **✏️ Text & Effekte → 1. Text:** Text einfügen (Leerzeilen und Überschrift dürfen drin bleiben) → „Text übernehmen“.
+   Passt der Text zum Lied (36 Zeilen), bekommt jede Zeile **automatisch** ihre Zeit – fertig, Schritt 2 entfällt.
 2. **2. Aufnehmen:** „Aufnahme von vorn starten“ und mittippen:
    - `Enter` – nächste Zeile beginnt
    - `R` Refrain (viel Feuerwerk) · `V` Strophe · `P` ganz ruhig · `Y` Rap-Teil (alle tanzen synchron, mit Sonnenbrille)

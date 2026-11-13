@@ -1,5 +1,5 @@
 // Editor: Text einfügen, beim Abspielen Zeilen und Effekte mittippen, Zeiten feinjustieren.
-import { Sheet, CueType, CUE_LABEL, saveSheet, emptySheet, fmtTime, defaultCues, SONG_BPM, SONG_OFFSET, SONG_END } from './cues';
+import { Sheet, CueType, CUE_LABEL, saveSheet, emptySheet, fmtTime, defaultCues, SONG_BPM, SONG_OFFSET, SONG_END, autoTimeLines, TEXT_LINE_COUNT } from './cues';
 
 const KEYMAP: Record<string, CueType> = {
   r: 'refrain', v: 'strophe', p: 'ruhig', y: 'rap', m: 'martin', f: 'frieren', h: 'herz', l: 'lichter', s: 'stern', n: 'schnee', g: 'glocken', k: 'lichterkinder',
@@ -21,17 +21,15 @@ export class Editor {
     private play: (from: number) => Promise<void>,
     private stop: () => Promise<void>,
     private seek: (t: number) => Promise<void>,
-    private toast: (s: string) => void,
+    private toast: (s: string, ms?: number) => void,
   ) {
     this.el.querySelectorAll<HTMLButtonElement>('.tabs button').forEach(b => b.onclick = () => this.tab(b.dataset.tab!));
     const ta = document.getElementById('ed-text') as HTMLTextAreaElement;
     document.getElementById('ed-apply')!.onclick = () => {
-      const texts = ta.value.split('\n').map(s => s.trim()).filter(Boolean);
-      const old = this.sheet().lines;
-      const keep = old.length === texts.length;
-      this.changed({ ...this.sheet(), lines: texts.map((text, i) => ({ text, t: keep ? old[i].t : null })) });
-      this.toast(`${texts.length} Zeilen übernommen`);
-      this.tab('rec');
+      const { lines, matched } = autoTimeLines(ta.value);
+      this.changed({ ...this.sheet(), lines });
+      if (matched) { this.toast(`✔ ${lines.length} Zeilen – automatisch passend zum Lied getimt`, 3500); this.tab('list'); }
+      else { this.toast(`${lines.length} Zeilen übernommen – bitte unter „2. Aufnehmen“ mittippen`, 4000); this.tab('rec'); }
     };
     document.getElementById('ed-rec')!.onclick = () => this.startRec();
     document.getElementById('ed-stop')!.onclick = () => this.stopRec();
@@ -67,7 +65,8 @@ export class Editor {
 
   open() {
     this.el.classList.remove('hidden');
-    (document.getElementById('ed-text') as HTMLTextAreaElement).value = this.sheet().lines.map(l => l.text).join('\n');
+    const ls = this.sheet().lines;
+    (document.getElementById('ed-text') as HTMLTextAreaElement).value = (ls.length === TEXT_LINE_COUNT + 8 ? ls.slice(0, TEXT_LINE_COUNT) : ls).map(l => l.text).join('\n');
     this.renderList();
     this.tab(this.sheet().lines.length ? 'list' : 'text');
   }
