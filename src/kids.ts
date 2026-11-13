@@ -29,6 +29,7 @@ function toon(color: number) {
   return new THREE.MeshToonMaterial({ color, gradientMap });
 }
 
+const _q = new THREE.Quaternion(), _q2 = new THREE.Quaternion(), _swing = new THREE.Euler();
 const cl = (x: number, a = 0, b = 1) => Math.min(b, Math.max(a, x));
 const ss = (x: number) => { x = cl(x); return x * x * (3 - 2 * x); };
 const lerp = (a: number, b: number, k: number) => a + (b - a) * k;
@@ -45,7 +46,7 @@ const mirror = (a: Arm): Arm => ({ sx: a.sx, sz: -a.sz, ex: a.ex, ez: -a.ez });
 interface Kid {
   root: THREE.Group; spinner: THREE.Group; body: THREE.Group;
   shL: THREE.Group; elL: THREE.Group; shR: THREE.Group; elR: THREE.Group;
-  eyes: THREE.Mesh[]; pupils: THREE.Mesh[]; lanternGroup: THREE.Group; lanternMat: THREE.MeshBasicMaterial;
+  eyes: THREE.Mesh[]; pupils: THREE.Mesh[]; lanternGroup: THREE.Group; tip: THREE.Group; hang: THREE.Group; lanternMat: THREE.MeshBasicMaterial;
   lanternBase: THREE.Color; phase: number; idx: number; mouth: THREE.Mesh; legL: THREE.Mesh; legR: THREE.Mesh;
   baseX: number; baseZ: number; baseRotY: number; shades: THREE.Group; bodyMat: THREE.MeshToonMaterial;
 }
@@ -207,13 +208,18 @@ export class Kids {
     const legR = legL.clone(); legR.position.x = 0.18; body.add(legR);
 
     // Laterne an Stab in der rechten Hand
-    const lanternGroup = new THREE.Group(); elR.add(lanternGroup);
-    const stick = new THREE.Mesh(new THREE.CylinderGeometry(0.015, 0.015, 0.6, 6), toon(0x6b4423));
-    stick.position.set(0, -0.42, 0.25); stick.rotation.x = 1.0; lanternGroup.add(stick);
+    // Stab zeigt schräg nach vorn-oben, die Laterne hängt an einer Schnur und baumelt
+    const lanternGroup = new THREE.Group(); lanternGroup.position.y = -0.27; elR.add(lanternGroup);
+    const stick = new THREE.Mesh(new THREE.CylinderGeometry(0.016, 0.016, 0.72, 6), toon(0x6b4423));
+    stick.rotation.x = 2.356; stick.position.set(0, -0.255, 0.255); lanternGroup.add(stick);
+    const stickTip = new THREE.Group(); stickTip.position.set(0, -0.51, 0.51); lanternGroup.add(stickTip);
+    const hang = new THREE.Group(); stickTip.add(hang);
+    const string = new THREE.Mesh(new THREE.CylinderGeometry(0.006, 0.006, 0.24, 4), new THREE.MeshBasicMaterial({ color: 0x222233 }));
+    string.position.y = -0.12; hang.add(string);
     const lanternBase = new THREE.Color(LANTERN[i]);
     const lanternMat = new THREE.MeshBasicMaterial({ color: lanternBase.clone().multiplyScalar(2.2) });
     const lantern = new THREE.Mesh(new THREE.SphereGeometry(0.17, 18, 14), lanternMat);
-    lantern.scale.set(1, 1.15, 1); lantern.position.set(0, -0.42, 0.58); lanternGroup.add(lantern);
+    lantern.scale.set(1, 1.15, 1); lantern.position.y = -0.43; hang.add(lantern);
     for (const yy of [0.19, -0.19]) {
       const cap = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.07, 0.04, 12), toon(0x333344));
       cap.position.y = yy; lantern.add(cap);
@@ -231,7 +237,7 @@ export class Kids {
     shades.position.set(0, 1.31, 0.45); shades.visible = false; body.add(shades);
 
     this.group.add(root);
-    return { root, spinner, body, shL, elL, shR, elR, eyes, pupils, lanternGroup, lanternMat, lanternBase, phase: (i * 0.37) % 1, idx: i,
+    return { root, spinner, body, shL, elL, shR, elR, eyes, pupils, lanternGroup, tip: stickTip, hang, lanternMat, lanternBase, phase: (i * 0.37) % 1, idx: i,
       mouth, legL, legR, baseX: x, baseZ: z, baseRotY, shades, bodyMat };
   }
 
@@ -347,7 +353,15 @@ export class Kids {
       k.lanternGroup.visible = lsc > 0.02; k.lanternGroup.scale.setScalar(Math.max(0.001, lsc));
       const glow = 1.0 + 0.1 * Math.sin(t * 5 + ph * 9) + (licht < 4 ? 1.3 * Math.exp(-licht * 0.8) : 0) + energy * 0.2;
       k.lanternMat.color.copy(k.lanternBase).multiplyScalar(glow);
-      k.lanternGroup.rotation.z = Math.sin(t * 3 + ph * 4) * 0.12;
+      // Pendel: Laterne hängt immer nach unten und schwingt – stärker, wenn getanzt wird
+      if (k.lanternGroup.visible) {
+        const amp = 0.18 + 0.25 * energy;
+        const w = 2 * Math.PI * 0.85;
+        _swing.set(amp * 0.6 * Math.sin(w * t + ph * 5 + 1), 0, amp * Math.sin(w * t + ph * 5));
+        k.root.updateMatrixWorld(true);
+        k.tip.getWorldQuaternion(_q);
+        k.hang.quaternion.copy(_q.invert()).multiply(_q2.setFromEuler(_swing));
+      }
     }
     this.updateMantel(t);
     this.light.intensity = 1.2 + 0.08 * Math.sin(t * 7) + (licht < 4 ? 1.8 * Math.exp(-licht) : 0);
