@@ -68,3 +68,11 @@ kbd { background: #fff; color: #111; border-radius: 4px; padding: 0 6px; font-we
 #toast { position: fixed; left: 50%; top: 40%; transform: translate(-50%, -50%); background: rgba(0,0,0,.75); padding: 14px 20px; border-radius: 12px;
   font-weight: 800; font-size: 20px; opacity: 0; transition: opacity .4s; pointer-events: none; text-align: center; max-width: 80vw; }
 #toast.show { opacity: 1; }
+
+#chooser { position: fixed; inset: 0; background: rgba(2,4,20,.6); display: flex; align-items: center; justify-content: center; backdrop-filter: blur(4px); }
+#chooser .box { background: rgba(12,16,44,.95); border: 1px solid rgba(255,255,255,.15); border-radius: 18px; padding: 22px; width: min(460px, 92vw); display: flex; flex-direction: column; gap: 10px; }
+#chooser h3 { margin: 0 0 6px; text-align: center; }
+#chooser button { text-align: left; padding: 12px 14px; font-size: 18px; }
+#chooser small { font-weight: 500; opacity: .75; font-size: 13px; }
+#countdown { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; pointer-events: none; font-size: clamp(120px, 26vw, 360px); font-weight: 900; color: #fff3d0; text-shadow: 0 0 40px #ffb347, 0 0 90px #ff7a00; opacity: 0; }
+#countdown.on { opacity: 1; }

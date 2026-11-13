@@ -35,7 +35,8 @@
     <label>Abspielquelle
       <select id="set-source">
         <option value="spotify">Spotify (Premium)</option>
-        <option value="demo">Demo ohne Ton</option>
+        <option value="file">Eigene Musikdatei (mp3, m4a …)</option>
+        <option value="demo">Ohne Ton – Musik läuft woanders</option>
       </select>
     </label>
     <div id="spotify-box">
@@ -48,6 +49,12 @@
       </div>
       <p class="hint">Rücksprung-Adresse für das Spotify-Dashboard:<br /><code id="redirect-uri"></code></p>
     </div>
+    <div id="file-box">
+      <div class="row"><button id="btn-pick-file">Musikdatei wählen…</button></div>
+      <p class="hint" id="file-name">Noch keine Datei gewählt.</p>
+      <input id="audio-file" type="file" accept="audio/*" hidden />
+    </div>
+    <div id="demo-box"><p class="hint">Die Show startet mit einem Countdown 3 – 2 – 1. Bei „Los!“ die Musik am anderen Gerät starten.</p></div>
     <label>Verzögerung (Bluetooth): <b id="lat-val">0</b> ms
       <input id="set-latency" type="range" min="0" max="600" step="10" value="0" />
     </label>
@@ -109,6 +116,15 @@
     <div class="row"><button id="ed-close">Schließen</button></div>
   </div>
 
+  <div id="chooser" class="hidden">
+    <div class="box">
+      <h3>Wie soll die Musik laufen?</h3>
+      <button data-src="spotify">🎵 Mit Spotify<br><small>Lied läuft in der Show, immer synchron (Premium)</small></button>
+      <button data-src="file">📁 Eigene Musikdatei<br><small>mp3/m4a vom Laptop, immer synchron</small></button>
+      <button data-src="demo">⏱️ Ohne Ton<br><small>Countdown, dann Musik woanders starten</small></button>
+    </div>
+  </div>
+  <div id="countdown"></div>
   <div id="toast"></div>
   <script type="module" src="./src/main.ts"></script>
 </body>

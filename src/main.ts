@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { Stage } from './scene';
 import { Lyrics } from './lyrics';
 import { Editor } from './editor';
-import { Clock, DemoClock, SpotifyClock } from './clock';
+import { Clock, CountdownClock, SpotifyClock, FileClock, storeAudio, loadAudio } from './clock';
 import { SpotifyPlayer, handleRedirect, login, logout, isLoggedIn, getClientId, setClientId, redirectUri } from './spotify';
 import { loadSheet, saveSheet, Sheet, sectionsOf, effectCues, fmtTime, SONG_DURATION, Cue } from './cues';
 
@@ -12,13 +12,18 @@ const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getEleme
 let sheet: Sheet = loadSheet();
 const prefs = JSON.parse(localStorage.getItem('lk-prefs') || '{}');
 let latency: number = prefs.latency ?? 150;
-let source: 'spotify' | 'demo' = prefs.source ?? 'spotify';
+type Source = 'spotify' | 'file' | 'demo';
+let source: Source = prefs.source ?? 'demo';
+let chosen: boolean = !!prefs.source;
 let showLyrics: boolean = prefs.lyrics ?? true;
-const savePrefs = () => localStorage.setItem('lk-prefs', JSON.stringify({ latency, source, lyrics: showLyrics }));
+const savePrefs = () => localStorage.setItem('lk-prefs', JSON.stringify({ latency, source: chosen ? source : undefined, lyrics: showLyrics }));
 
 const sp = new SpotifyPlayer();
-const demo = new DemoClock();
-let clock: Clock = source === 'spotify' ? new SpotifyClock(sp) : demo;
+const demo = new CountdownClock();
+const fileClock = new FileClock();
+const spClock = new SpotifyClock(sp);
+const clockFor = (s: Source): Clock => (s === 'spotify' ? spClock : s === 'file' ? fileClock : demo);
+let clock: Clock = clockFor(source);
 let started = false;
 
 const stage = new Stage($<HTMLCanvasElement>('gl'));
@@ -51,18 +56,30 @@ sp.onStatus = status;
 
 const songTime = () => clock.time() - latency / 1000;
 
+async function setSource(s: Source) {
+  await clock.pause().catch(() => {});
+  source = s; chosen = true; clock = clockFor(s); started = false; savePrefs(); syncSettingsUi();
+}
+/** Prüft, ob die gewählte Quelle startklar ist; sonst Auswahl bzw. Einstellungen zeigen. */
+function ready(): boolean {
+  if (!chosen) { $('chooser').classList.remove('hidden'); return false; }
+  if (source === 'spotify' && !isLoggedIn()) { openSettings(); toast('Bitte zuerst bei Spotify anmelden – oder unter „Abspielquelle“ ohne Spotify starten', 4500); return false; }
+  if (source === 'file' && !fileClock.hasFile()) { $('audio-file').click(); return false; }
+  return true;
+}
 async function startOrToggle() {
   try {
-    if (source === 'spotify' && !isLoggedIn()) { openSettings(); toast('Bitte zuerst bei Spotify anmelden'); return; }
+    if (!ready()) return;
     if (!started) { started = true; status(source === 'spotify' ? 'Verbinde mit Spotify…' : 'Demo'); }
     await clock.toggle();
   } catch (e: any) { toast(e.message || String(e), 4000); status(''); started = false; }
 }
 async function playFrom(t: number) {
-  if (source === 'spotify' && !isLoggedIn()) { toast('Bitte zuerst bei Spotify anmelden'); throw new Error('login'); }
+  if (!ready()) throw new Error('nicht bereit');
   started = true;
   if (source === 'spotify') await sp.playFrom(t);
-  else { await demo.seek(t); if (!demo.playing()) await demo.toggle(); }
+  else if (source === 'file') { await fileClock.seek(t); if (!fileClock.playing()) await fileClock.toggle(); }
+  else { await demo.seek(t); if (!demo.playing()) await demo.startNow(); }
 }
 
 // ---------- Editor ----------
@@ -76,6 +93,9 @@ function openSettings() { $('settings').classList.remove('hidden'); }
 function syncSettingsUi() {
   ($('set-source') as HTMLSelectElement).value = source;
   $('spotify-box').style.display = source === 'spotify' ? '' : 'none';
+  $('file-box').style.display = source === 'file' ? '' : 'none';
+  $('demo-box').style.display = source === 'demo' ? '' : 'none';
+  $('file-name').textContent = fileClock.name ? '🎵 ' + fileClock.name : 'Noch keine Datei gewählt.';
   ($('set-client') as HTMLInputElement).value = getClientId();
   $('redirect-uri').textContent = redirectUri();
   ($('set-latency') as HTMLInputElement).value = String(latency); $('lat-val').textContent = String(latency);
@@ -85,12 +105,20 @@ function syncSettingsUi() {
 }
 $('btn-settings').onclick = () => { syncSettingsUi(); $('settings').classList.toggle('hidden'); };
 $('btn-close-settings').onclick = () => $('settings').classList.add('hidden');
-$('set-source').onchange = async () => {
-  await clock.pause().catch(() => {});
-  source = ($('set-source') as HTMLSelectElement).value as typeof source;
-  clock = source === 'spotify' ? new SpotifyClock(sp) : demo;
-  started = false; savePrefs(); syncSettingsUi();
+$('set-source').onchange = () => setSource(($('set-source') as HTMLSelectElement).value as Source);
+$('btn-pick-file').onclick = () => $('audio-file').click();
+$('audio-file').onchange = async () => {
+  const f = ($('audio-file') as HTMLInputElement).files?.[0]; if (!f) return;
+  fileClock.setFile(f, f.name); storeAudio(f, f.name);
+  if (source !== 'file') await setSource('file');
+  syncSettingsUi(); toast('🎵 ' + f.name);
 };
+document.querySelectorAll<HTMLButtonElement>('#chooser button').forEach(b => b.onclick = async () => {
+  $('chooser').classList.add('hidden');
+  await setSource(b.dataset.src as Source);
+  if (ready()) startOrToggle();
+});
+$('chooser').onclick = e => { if (e.target === $('chooser')) $('chooser').classList.add('hidden'); };
 $('set-client').onchange = () => setClientId(($('set-client') as HTMLInputElement).value);
 $('btn-login').onclick = () => { setClientId(($('set-client') as HTMLInputElement).value); login().catch(e => toast(e.message)); };
 $('btn-logout').onclick = () => { logout(); syncSettingsUi(); toast('Abgemeldet'); };
@@ -149,6 +177,10 @@ function frame() {
   $('title-card').classList.toggle('hide', started && t > 9);
   $('time').textContent = `${fmtTime(t)} / ${fmtTime(SONG_DURATION)}`;
   $('btn-play').textContent = clock.playing() ? '⏸ Pause' : '▶ Start';
+  const cd = source === 'demo' ? demo.countdownUntil : 0;
+  const cdEl = $('countdown');
+  if (cd) { const left = (cd - performance.now()) / 1000; cdEl.textContent = left > 0.6 ? String(Math.ceil(left - 0.6)) : 'Los!'; cdEl.classList.add('on'); }
+  else cdEl.classList.remove('on');
   const idle = clock.playing() && performance.now() - lastMove > 3000 && !editor.isOpen() && $('settings').classList.contains('hidden');
   $('toolbar').classList.toggle('idle', idle);
   document.body.style.cursor = idle ? 'none' : '';
@@ -165,11 +197,13 @@ function frame() {
 // ---------- Start ----------
 (async () => {
   try { const msg = await handleRedirect(); if (msg) toast(msg, 3000); } catch (e: any) { toast(e.message, 4000); }
+  const saved = await loadAudio();
+  if (saved) fileClock.setFile(saved.blob, saved.name);
   syncSettingsUi();
   if (source === 'spotify' && !isLoggedIn()) status('Noch nicht bei Spotify angemeldet (⚙️)');
   // Testhilfe: ?t=123 springt im Demo-Modus an eine Stelle
   const q = new URLSearchParams(location.search).get('t');
-  if (q) { source = 'demo'; clock = demo; started = true; await demo.seek(+q); latency = 0; if (new URLSearchParams(location.search).has('play')) await demo.toggle(); }
+  if (q) { source = 'demo'; chosen = true; clock = demo; started = true; await demo.seek(+q); latency = 0; if (new URLSearchParams(location.search).has('play')) await demo.toggle(); }
   requestAnimationFrame(frame);
 })();
 

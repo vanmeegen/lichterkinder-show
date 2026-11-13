@@ -42,7 +42,10 @@ zusätzlich automatisch aus und leuchten beim Singen auf.
 
 - `Leertaste` Start/Pause · `F` Vollbild · `←`/`→` 5 Sekunden springen
 - ⚙️ **Verzögerung:** Bei Bluetooth-Boxen kommt der Ton später an. Regler verschieben, bis Knall und Musik zusammenpassen.
-- Ohne Spotify gibt es einen **Demo-Modus** zum Ausprobieren.
+- **Ohne Spotify** geht es auch: Beim ersten Start fragt die Show, wie die Musik laufen soll
+  (umstellbar unter ⚙️ → Abspielquelle):
+  - **Eigene Musikdatei** (mp3/m4a vom Laptop) – immer synchron, die Datei wird im Browser gemerkt.
+  - **Ohne Ton** – Countdown 3-2-1, bei „Los!“ die Musik auf einem anderen Gerät starten.
 
 ## Entwicklung
 
