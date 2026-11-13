@@ -1,5 +1,6 @@
 // Die Lichterkinder: eigene, knuffige Bohnen-Figuren mit Mütze, Schal, Laterne – und Armen mit Ellbogen.
 import * as THREE from 'three';
+import { RAP_MOVES, soloPlan } from './rapmoves';
 
 export interface Mood {
   t: number;            // Liedzeit (s)
@@ -8,6 +9,9 @@ export interface Mood {
   rap: number;          // 0 … 1 Rap-Teil (alle synchron)
   rapT: number;         // Sekunden seit Beginn des Rap-Teils (−1 außerhalb)
   rapLen: number;       // Länge des Rap-Teils
+  rapBeat: number;      // Schläge seit Beginn des Rap-Teils
+  rapNo: number;        // welcher Rap-Teil (0, 1, 2 …)
+  rapCount: number;     // Anzahl Rap-Teile im Lied
   since: Record<string, number>; // Sekunden seit letztem Effekt je Typ
   look: THREE.Vector3;  // wohin geschaut wird (letzter Knall)
 }
@@ -48,7 +52,7 @@ interface Kid {
   shL: THREE.Group; elL: THREE.Group; shR: THREE.Group; elR: THREE.Group;
   eyes: THREE.Mesh[]; pupils: THREE.Mesh[]; lanternGroup: THREE.Group; tip: THREE.Group; hang: THREE.Group; lanternMat: THREE.MeshBasicMaterial;
   lanternBase: THREE.Color; phase: number; idx: number; mouth: THREE.Mesh; legL: THREE.Mesh; legR: THREE.Mesh;
-  baseX: number; baseZ: number; baseRotY: number; shades: THREE.Group; bodyMat: THREE.MeshToonMaterial; rapMouth: THREE.Group;
+  baseX: number; baseZ: number; baseRotY: number; shades: THREE.Group; bodyMat: THREE.MeshToonMaterial; rapMouth: THREE.Group; spot: THREE.Mesh;
 }
 
 const heartShape = (() => {
@@ -255,9 +259,13 @@ export class Kids {
     const brow = new THREE.Mesh(new THREE.BoxGeometry(0.66, 0.045, 0.04), frameMat); brow.position.set(0, 0.085, 0.0); shades.add(brow);
     shades.position.set(0, 1.3, 0.43); shades.visible = false; body.add(shades);
 
+    // Lichtkreis am Boden für Solo-Moves
+    const spot = new THREE.Mesh(new THREE.CircleGeometry(0.85, 32), new THREE.MeshBasicMaterial({ color: new THREE.Color(1, 0.8, 0.45).multiplyScalar(1.3), transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending }));
+    spot.rotation.x = -Math.PI / 2; spot.position.set(x, 0.02, z + 0.5); spot.visible = false; this.group.add(spot);
+
     this.group.add(root);
     return { root, spinner, body, shL, elL, shR, elR, eyes, pupils, lanternGroup, tip: stickTip, hang, lanternMat, lanternBase, phase: (i * 0.37) % 1, idx: i,
-      mouth, legL, legR, baseX: x, baseZ: z, baseRotY, shades, bodyMat, rapMouth };
+      mouth, legL, legR, baseX: x, baseZ: z, baseRotY, shades, bodyMat, rapMouth, spot };
   }
 
   /** Hip-Hop-Choreografie: alle 2 Takte ein neuer Move, weich überblendet. */
@@ -287,6 +295,14 @@ export class Kids {
     const herz = m.since.herz ?? 99, licht = m.since.lichter ?? 99, lk = m.since.lichterkinder ?? 99, stern = m.since.stern ?? 99;
     const fr = m.since.frieren ?? 99;
     const n = this.kids.length;
+    // Solisten im Rap: alle 2 Takte zufällig ein anderes Kind mit einem anderen Move, im letzten Rap-Teil drei gleichzeitig
+    const solos = new Map<number, { move: number; s: number; b: number }>();
+    if (m.rap > 0 && m.rapT >= 0) {
+      const seg = Math.floor(m.rapBeat / 8), fb = m.rapBeat - seg * 8;
+      const count = m.rapNo === m.rapCount - 1 ? 3 : 1;
+      const s = ss(fb / 0.5) * (1 - ss((fb - 7.4) / 0.6));
+      for (const p of soloPlan(m.rapNo, seg, count, BREAKER, n)) solos.set(p.kid, { move: p.move, s, b: fb });
+    }
     for (const k of this.kids) {
       const ph = k.phase;
       // ---------- Grundbewegung ----------
@@ -336,7 +352,17 @@ export class Kids {
         bodyRz = lerp(bodyRz, 0.09 * sway, rp);
         rotY = lerp(rotY, 0.22 * sway, rp);                                  // lässig mitdrehen
         x += 0.2 * sway * rp;                                                // Seitschritt im Takt
-        pose = mixPose(pose, this.rapPose(beat, k.idx), rp);
+        pose = mixPose(pose, this.rapPose(m.rapBeat, k.idx), rp);
+
+        const so = solos.get(k.idx);
+        if (so && so.s > 0) {
+          const r = RAP_MOVES[so.move].f(so.b), w = so.s * rp;
+          pose = mixPose(pose, r.pose, w);
+          y += (r.y ?? 0) * w; x += (r.dx ?? 0) * w; zPos += (0.45 + (r.dz ?? 0)) * w;
+          bodyRx = lerp(bodyRx, r.rx ?? 0, w); bodyRz = lerp(bodyRz, r.rz ?? 0, w);
+          rotY = lerp(rotY, k.baseRotY + (r.ry ?? 0), w); squash = lerp(squash, r.squash ?? 1, w);
+          extraSpin += (r.spin ?? 0) * (so.s > 0.99 ? 1 : 0);
+        }
 
         // Breakdance in der Mitte
         if (k.idx === BREAKER && m.rapT >= 0 && m.rapLen > 16) {
@@ -346,6 +372,11 @@ export class Kids {
           bodyRx *= 1 - r.on; bodyRz *= 1 - r.on; x = lerp(x, k.baseX, r.on);
         }
       }
+
+      const sw = (solos.get(k.idx)?.s ?? 0) * rp;
+      k.spot.visible = sw > 0.01;
+      (k.spot.material as THREE.MeshBasicMaterial).opacity = 0.55 * sw;
+      k.spot.position.x = x;
 
       // ---------- anwenden ----------
       k.root.position.set(x, y, zPos);

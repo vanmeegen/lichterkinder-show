@@ -241,7 +241,9 @@ function mood(t: number) {
   const since: Record<string, number> = {};
   for (const c of effects) if (c.t <= t) since[c.type] = t - c.t;
   const rapT = sec.kind === 'rap' ? t - sec.t0 : -1, rapLen = sec.kind === 'rap' ? Math.min(sec.t1, SONG_DURATION) - sec.t0 : 0;
-  return { t, beat: ((t - (sheet.offset ?? 0)) * sheet.bpm) / 60, energy, rap: Math.max(0, rapIn), rapT, rapLen, since };
+  const raps = sections.filter(s => s.kind === 'rap');
+  const rapNo = Math.max(0, raps.indexOf(sec)), rapBeat = rapT >= 0 ? (rapT * sheet.bpm) / 60 : 0;
+  return { t, beat: ((t - (sheet.offset ?? 0)) * sheet.bpm) / 60, energy, rap: Math.max(0, rapIn), rapT, rapLen, rapBeat, rapNo, rapCount: raps.length, since };
 }
 
 function frame() {
