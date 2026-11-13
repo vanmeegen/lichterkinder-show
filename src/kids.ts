@@ -48,7 +48,7 @@ interface Kid {
   shL: THREE.Group; elL: THREE.Group; shR: THREE.Group; elR: THREE.Group;
   eyes: THREE.Mesh[]; pupils: THREE.Mesh[]; lanternGroup: THREE.Group; tip: THREE.Group; hang: THREE.Group; lanternMat: THREE.MeshBasicMaterial;
   lanternBase: THREE.Color; phase: number; idx: number; mouth: THREE.Mesh; legL: THREE.Mesh; legR: THREE.Mesh;
-  baseX: number; baseZ: number; baseRotY: number; shades: THREE.Group; bodyMat: THREE.MeshToonMaterial;
+  baseX: number; baseZ: number; baseRotY: number; shades: THREE.Group; bodyMat: THREE.MeshToonMaterial; rapMouth: THREE.Group;
 }
 
 const heartShape = (() => {
@@ -171,7 +171,13 @@ export class Kids {
       cheek.scale.set(1.3, 0.8, 0.4); cheek.position.set(s * 0.26, 1.15, 0.36); body.add(cheek);
     }
     const mouth = new THREE.Mesh(new THREE.TorusGeometry(0.075, 0.02, 8, 16, Math.PI), black);
-    mouth.rotation.z = Math.PI; mouth.position.set(0, 1.14, 0.41); body.add(mouth);
+    mouth.rotation.z = Math.PI; mouth.position.set(0, 1.155, 0.452); body.add(mouth);
+    // offener Mund zum Rappen
+    const rapMouth = new THREE.Group(); rapMouth.position.set(0, 1.12, 0.446); rapMouth.visible = false; body.add(rapMouth);
+    const hole = new THREE.Mesh(new THREE.CircleGeometry(0.075, 20), new THREE.MeshBasicMaterial({ color: 0x3a0a14 }));
+    hole.scale.set(1, 0.7, 1); rapMouth.add(hole);
+    const tongue = new THREE.Mesh(new THREE.CircleGeometry(0.04, 14), new THREE.MeshBasicMaterial({ color: 0xff6f8f }));
+    tongue.position.set(0, -0.025, 0.002); tongue.scale.set(1.2, 0.6, 1); rapMouth.add(tongue);
 
     const hatMat = toon(HAT[i]);
     const hat = new THREE.Mesh(new THREE.SphereGeometry(0.455, 24, 14, 0, Math.PI * 2, 0, Math.PI / 2), hatMat);
@@ -185,9 +191,9 @@ export class Kids {
 
     const scarfMat = toon(SCARF[i]);
     const scarf = new THREE.Mesh(new THREE.TorusGeometry(0.4, 0.09, 10, 28), scarfMat);
-    scarf.rotation.x = Math.PI / 2; scarf.position.y = 1.0; body.add(scarf);
+    scarf.rotation.x = Math.PI / 2; scarf.position.y = 0.9; scarf.scale.set(1.04, 1.04, 1); body.add(scarf);
     const tail = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.42, 0.06), scarfMat);
-    tail.position.set(-0.2, 0.78, 0.4); tail.rotation.z = 0.15; body.add(tail);
+    tail.position.set(-0.2, 0.68, 0.42); tail.rotation.z = 0.15; body.add(tail);
 
     // Arme mit Ober- und Unterarm
     const upperGeo = new THREE.CapsuleGeometry(0.085, 0.17, 6, 12), foreGeo = new THREE.CapsuleGeometry(0.078, 0.15, 6, 12);
@@ -225,20 +231,33 @@ export class Kids {
       cap.position.y = yy; lantern.add(cap);
     }
 
+    // Große, kantige schwarze Sonnenbrille mit dickem Rahmen
     const shades = new THREE.Group();
-    const glassMat = new THREE.MeshBasicMaterial({ color: 0x0b0b14 });
+    const frameMat = new THREE.MeshBasicMaterial({ color: 0x050508 });
+    const lensMat = new THREE.MeshBasicMaterial({ color: 0x14141c });
+    const glintMat = new THREE.MeshBasicMaterial({ color: 0x9aa4c8, transparent: true, opacity: 0.55 });
+    const lensShape = (w: number, h: number) => {
+      const p = new THREE.Shape();
+      p.moveTo(-w / 2, h / 2); p.lineTo(w / 2, h / 2); p.lineTo(w / 2 - 0.035, -h / 2); p.lineTo(-w / 2 + 0.05, -h / 2); p.closePath();
+      return p;
+    };
     for (const sx of [-1, 1]) {
-      const g = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.15, 0.05), glassMat);
-      g.position.set(sx * 0.15, 0, 0); shades.add(g);
-      const shine = new THREE.Mesh(new THREE.PlaneGeometry(0.07, 0.03), new THREE.MeshBasicMaterial({ color: 0xffffff }));
-      shine.position.set(sx * 0.15 - 0.06, 0.035, 0.03); shine.rotation.z = 0.5; shades.add(shine);
+      const side = new THREE.Group(); side.position.set(sx * 0.165, 0, 0); side.rotation.y = sx * 0.22; side.scale.x = sx; shades.add(side);
+      const frame = new THREE.Mesh(new THREE.ExtrudeGeometry(lensShape(0.3, 0.19), { depth: 0.03, bevelEnabled: false }), frameMat);
+      frame.position.z = -0.015; side.add(frame);
+      const lens = new THREE.Mesh(new THREE.ShapeGeometry(lensShape(0.25, 0.14)), lensMat);
+      lens.position.set(0.005, -0.005, 0.017); side.add(lens);
+      const glint = new THREE.Mesh(new THREE.PlaneGeometry(0.16, 0.014), glintMat);
+      glint.position.set(0.02, 0.045, 0.019); glint.rotation.z = -0.12; side.add(glint);
+      const temple = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.03, 0.34), frameMat);
+      temple.position.set(-0.155, 0.07, -0.17); side.add(temple);
     }
-    shades.add(new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.03, 0.04), glassMat));
-    shades.position.set(0, 1.31, 0.45); shades.visible = false; body.add(shades);
+    const brow = new THREE.Mesh(new THREE.BoxGeometry(0.66, 0.045, 0.04), frameMat); brow.position.set(0, 0.085, 0.0); shades.add(brow);
+    shades.position.set(0, 1.3, 0.43); shades.visible = false; body.add(shades);
 
     this.group.add(root);
     return { root, spinner, body, shL, elL, shR, elR, eyes, pupils, lanternGroup, tip: stickTip, hang, lanternMat, lanternBase, phase: (i * 0.37) % 1, idx: i,
-      mouth, legL, legR, baseX: x, baseZ: z, baseRotY, shades, bodyMat };
+      mouth, legL, legR, baseX: x, baseZ: z, baseRotY, shades, bodyMat, rapMouth };
   }
 
   /** Hip-Hop-Choreografie: alle 2 Takte ein neuer Move, weich überblendet. */
@@ -344,8 +363,12 @@ export class Kids {
       for (const e of k.eyes) e.scale.set(1 + surprise, 1.2 * blink * (1 + surprise), 0.55);
       const dx = THREE.MathUtils.clamp((m.look.x - k.root.position.x) / 60, -1, 1);
       for (const p of k.pupils) p.position.set(dx * 0.035, 0.035, 0.09);
-      k.mouth.scale.setScalar(rp > 0 ? 1 + 0.6 * (0.5 + 0.5 * Math.cos(2 * Math.PI * beat)) * rp : 1 + 0.5 * energy * b);
+      k.mouth.scale.setScalar(1 + 0.5 * energy * b);
+      k.mouth.visible = rp < 0.3;
+      k.rapMouth.visible = rp >= 0.3;
+      if (rp >= 0.3) { const open = 0.5 + 0.5 * Math.abs(Math.sin(Math.PI * beat * 2 + ph)); k.rapMouth.scale.set(1, 0.45 + 0.75 * open, 1); }
       k.shades.visible = rp > 0.3;
+      for (const e of k.eyes) e.visible = rp <= 0.3; // Augen-Glanzpunkte nicht durch die Brille
       k.shades.scale.setScalar(Math.min(1, rp * 1.6));
 
       // Laterne: beim Rap weggesteckt
