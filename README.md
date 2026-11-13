@@ -28,14 +28,15 @@ Er bleibt **nur im Browser** (und optional in einer selbst gesicherten Datei) �
 1. **✏️ Text & Effekte → 1. Text:** Text einfügen, eine Mitsing-Zeile pro Zeile.
 2. **2. Aufnehmen:** „Aufnahme von vorn starten“ und mittippen:
    - `Enter` – nächste Zeile beginnt
-   - `R` Refrain (viel Feuerwerk) · `V` Strophe · `P` ganz ruhig
+   - `R` Refrain (viel Feuerwerk) · `V` Strophe · `P` ganz ruhig · `Y` Rap-Teil (alle tanzen synchron, mit Sonnenbrille)
    - `H` Herz · `L` Lichter · `S` Stern · `N` Schnee · `G` Glocken
+   - `M` St. Martin (ein Mantel erscheint und wird geteilt) · `F` Frieren (🥶-Emojis, Kinder zittern)
    - `K` „Lichterkinder“-Höhepunkt (Riesenfeuerwerk mit Schriftzug)
    - `T` im Takt tippen (Tempo für das Wippen der Figuren)
    - `Backspace` – letzten Eintrag zurücknehmen
 3. **3. Feinschliff:** Zeiten korrigieren, Effekte ergänzen, Ablauf als Datei sichern.
 
-Wörter wie *Herz*, *Licht*, *Stern*, *Schnee*, *Glocke* und *Lichterkinder* im Text lösen die passenden Effekte
+Wörter wie *Herz*, *Licht*, *Stern*, *Schnee*, *Glocke*, *Mantel*/*Martin*, *frieren*/*kalt* und *Lichterkinder* im Text lösen die passenden Effekte
 zusätzlich automatisch aus und leuchten beim Singen auf.
 
 ## Während der Show

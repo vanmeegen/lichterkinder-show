@@ -76,3 +76,6 @@ kbd { background: #fff; color: #111; border-radius: 4px; padding: 0 6px; font-we
 #chooser small { font-weight: 500; opacity: .75; font-size: 13px; }
 #countdown { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; pointer-events: none; font-size: clamp(120px, 26vw, 360px); font-weight: 900; color: #fff3d0; text-shadow: 0 0 40px #ffb347, 0 0 90px #ff7a00; opacity: 0; }
 #countdown.on { opacity: 1; }
+
+#fx-layer { position: fixed; inset: 0; pointer-events: none; overflow: hidden; }
+.pop-emoji { position: absolute; font-size: clamp(40px, 6vw, 90px); opacity: 0; filter: drop-shadow(0 0 12px rgba(150,220,255,.9)); will-change: transform, opacity; }

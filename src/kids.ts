@@ -5,6 +5,7 @@ export interface Mood {
   t: number;            // Liedzeit (s)
   beat: number;         // Schläge seit Start
   energy: number;       // 0 ruhig … 1 Refrain
+  rap: number;          // 0 … 1 Rap-Teil (alle synchron)
   since: Record<string, number>; // Sekunden seit letztem Effekt je Typ
   look: THREE.Vector3;  // wohin geschaut wird (letzter Knall)
 }
@@ -29,6 +30,7 @@ interface Kid {
   root: THREE.Group; body: THREE.Group; armL: THREE.Group; armR: THREE.Group;
   eyes: THREE.Mesh[]; pupils: THREE.Mesh[]; lantern: THREE.Mesh; lanternMat: THREE.MeshBasicMaterial;
   lanternBase: THREE.Color; phase: number; idx: number; mouth: THREE.Mesh; legL: THREE.Mesh; legR: THREE.Mesh;
+  baseX: number; shades: THREE.Group; bodyMat: THREE.MeshToonMaterial;
 }
 
 const heartShape = (() => {
@@ -47,6 +49,64 @@ export class Kids {
   hearts: THREE.Mesh[] = [];
   light: THREE.PointLight;
   herzTimes: number[] = [];
+  martinTimes: number[] = [];
+  mantel = new THREE.Group(); halves: THREE.Group[] = []; slash!: THREE.Mesh;
+
+  private buildMantel() {
+    const red = toon(0xc81e2a), lining = toon(0xffd166);
+    const gold = new THREE.LineBasicMaterial({ color: new THREE.Color(1, 0.8, 0.3).multiplyScalar(1.6) });
+    for (const side of [-1, 1]) {
+      const pts: [number, number][] = [[0, 1.0], [0.42, 1.0], [0.55, 0.75], [1.25, -1.05]];
+      for (let i = 1; i <= 6; i++) { const x = 1.25 - (1.25 * i) / 6; pts.push([x, -1.1 - 0.1 * Math.sin(i * 1.7)]); }
+      const sh = new THREE.Shape(pts.map(([x, y]) => new THREE.Vector2(x * side, y)));
+      const geo = new THREE.ExtrudeGeometry(sh, { depth: 0.05, bevelEnabled: false });
+      const half = new THREE.Group();
+      half.add(new THREE.Mesh(geo, [red, lining] as any));
+      const outline = new THREE.Line(new THREE.BufferGeometry().setFromPoints([...pts, pts[0]].map(([x, y]) => new THREE.Vector3(x * side, y, 0.06))), gold);
+      half.add(outline);
+      const clasp = new THREE.Mesh(new THREE.SphereGeometry(0.08, 10, 8), new THREE.MeshBasicMaterial({ color: new THREE.Color(1, 0.8, 0.3).multiplyScalar(1.8) }));
+      clasp.position.set(0.32 * side, 0.85, 0.08); half.add(clasp);
+      this.halves.push(half); this.mantel.add(half);
+    }
+    this.slash = new THREE.Mesh(new THREE.PlaneGeometry(0.07, 3.0), new THREE.MeshBasicMaterial({ color: new THREE.Color(1, 0.95, 0.7).multiplyScalar(3), transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }));
+    this.slash.position.z = 0.15; this.mantel.add(this.slash);
+    this.mantel.visible = false;
+    this.group.add(this.mantel);
+  }
+
+  private updateMantel(t: number) {
+    let a = 99;
+    for (const mt of this.martinTimes) if (t >= mt && t - mt < 10) a = t - mt;
+    this.mantel.visible = a < 10;
+    if (!this.mantel.visible) return;
+    const ease = (x: number) => x * x * (3 - 2 * x);
+    const cl = (x: number) => Math.min(1, Math.max(0, x));
+    const appear = ease(cl(a / 0.8));
+    // 1) Mantel erscheint wehend über den Kindern
+    this.mantel.position.set(0, 4.4 + (1 - appear) * 2, 6.2);
+    this.mantel.scale.setScalar(0.3 + 0.9 * appear);
+    this.mantel.rotation.set(0, (1 - appear) * Math.PI * 2, Math.sin(a * 2.5) * 0.05 * appear);
+    // 2) Lichtschnitt von oben nach unten
+    const sl = cl((a - 0.9) / 0.35);
+    this.slash.visible = a > 0.9 && a < 1.6;
+    this.slash.scale.y = Math.max(0.01, sl);
+    this.slash.position.y = 1.5 - 1.5 * sl;
+    (this.slash.material as THREE.MeshBasicMaterial).opacity = a < 1.25 ? 1 : cl((1.6 - a) / 0.35);
+    // 3) Hälften gehen auseinander, 4) fliegen zu zwei Kindern
+    const split = ease(cl((a - 1.25) / 0.9));
+    const fly = ease(cl((a - 3.0) / 1.4));
+    const fade = cl((10 - a) / 1.2);
+    this.halves.forEach((h, i) => {
+      const side = i ? 1 : -1;
+      const kid = this.kids[i ? 5 : 3];
+      const sx = side * 0.9 * split, sy = Math.sin(a * 3 + i) * 0.08 * split;
+      const local = new THREE.Vector3(sx, sy, 0);
+      const target = new THREE.Vector3(kid.root.position.x - this.mantel.position.x - side * 0.05, kid.root.position.y + 1.05 - this.mantel.position.y, kid.root.position.z - 0.3 - this.mantel.position.z).divideScalar(this.mantel.scale.x);
+      h.position.copy(local.lerp(target, fly));
+      h.rotation.set(0, 0, side * 0.12 * split * (1 - fly) + Math.sin(a * 2 + i) * 0.04);
+      h.scale.setScalar((1 - 0.3 * fly) * (a > 8.8 ? fade : 1));
+    });
+  }
 
   constructor() {
     const n = BODY.length;
@@ -57,6 +117,7 @@ export class Kids {
     this.light = new THREE.PointLight(0xffc27a, 2.2, 14, 0);
     this.light.position.set(0, 2.6, 9.5);
     this.group.add(this.light);
+    this.buildMantel();
     const hg = new THREE.ExtrudeGeometry(heartShape, { depth: 0.12, bevelEnabled: true, bevelSize: 0.04, bevelThickness: 0.04, bevelSegments: 2 });
     hg.center();
     for (let i = 0; i < 27; i++) {
@@ -141,8 +202,20 @@ export class Kids {
       cap.position.y = yy; lantern.add(cap);
     }
 
+    // Sonnenbrille für den Rap-Teil
+    const shades = new THREE.Group();
+    const glassMat = new THREE.MeshBasicMaterial({ color: 0x0b0b14 });
+    for (const sx of [-1, 1]) {
+      const g = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.15, 0.05), glassMat);
+      g.position.set(sx * 0.15, 0, 0); shades.add(g);
+      const shine = new THREE.Mesh(new THREE.PlaneGeometry(0.07, 0.03), new THREE.MeshBasicMaterial({ color: 0xffffff }));
+      shine.position.set(sx * 0.15 - 0.06, 0.035, 0.03); shine.rotation.z = 0.5; shades.add(shine);
+    }
+    const bridge = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.03, 0.04), glassMat); shades.add(bridge);
+    shades.position.set(0, 1.31, 0.45); shades.visible = false; body.add(shades);
+
     this.group.add(root);
-    return { root, body, armL, armR, eyes, pupils, lantern, lanternMat, lanternBase, phase: (i * 0.37) % 1, idx: i, mouth, legL, legR };
+    return { root, body, armL, armR, eyes, pupils, lantern, lanternMat, lanternBase, phase: (i * 0.37) % 1, idx: i, mouth, legL, legR, baseX: x, shades, bodyMat };
   }
 
   update(m: Mood) {
@@ -181,6 +254,35 @@ export class Kids {
         lz = lz * (1 - f) - 2.75 * f; lx = 0.35 * f; rz = rz * (1 - f) + 2.75 * f; rx = rx * (1 - f) + 0.35 * f;
       }
       if (armsUp > 0) { lz = lz * (1 - armsUp) - 2.8 * armsUp; rz = rz * (1 - armsUp) + 2.5 * armsUp; rx = rx * (1 - armsUp); }
+      // Frieren: Arme um den Körper, zittern
+      const fr = m.since.frieren ?? 99;
+      const frz = fr < 4.5 ? Math.min(1, fr / 0.3) * Math.min(1, (4.5 - fr) / 0.6) : 0;
+      if (frz > 0) {
+        lz = lz * (1 - frz) + 0.95 * frz; lx = lx * (1 - frz) - 0.7 * frz; rz = rz * (1 - frz) - 0.95 * frz; rx = rx * (1 - frz) - 0.7 * frz;
+        k.body.rotation.z += Math.sin(t * 70 + ph * 10) * 0.045 * frz;
+        k.root.position.x = k.baseX + Math.sin(t * 55 + ph * 7) * 0.025 * frz;
+      } else k.root.position.x = k.baseX;
+      k.bodyMat.emissive.setRGB(0.05, 0.25, 0.55).multiplyScalar(frz * 0.8);
+
+      // Rap: alle exakt gleichzeitig – Kopfnicken, Seitschritt, Hand nach vorn im Takt
+      const rp = m.rap;
+      if (rp > 0) {
+        const fb = beat - Math.floor(beat);
+        const hit = Math.exp(-fb * 7);
+        const half = Math.sin(Math.PI * beat / 2);
+        k.root.position.y = k.root.position.y * (1 - rp) + 0.05 * hit * rp;
+        k.root.position.x += 0.22 * half * rp;
+        k.body.rotation.x = 0.2 * hit * rp;
+        k.body.rotation.z = k.body.rotation.z * (1 - rp) + 0.1 * half * rp;
+        k.body.rotation.y = k.body.rotation.y * (1 - rp) + (0.18 * half - k.root.rotation.y) * rp;
+        const rlx = -1.55 + 0.5 * hit, rlz = 0.3;      // Hand nach vorn, wippt auf jedem Schlag
+        const rrx = -0.5, rrz = 0.75;                    // Laterne lässig zur Seite
+        lx = lx * (1 - rp) + rlx * rp; lz = lz * (1 - rp) + rlz * rp;
+        rx = rx * (1 - rp) + rrx * rp; rz = rz * (1 - rp) + rrz * rp;
+        k.mouth.scale.setScalar(1 + 0.8 * hit * rp);
+      } else k.body.rotation.x = 0;
+      k.shades.visible = rp > 0.35;
+      k.shades.scale.setScalar(Math.min(1, rp * 1.6));
       k.armL.rotation.set(lx, 0, lz); k.armR.rotation.set(rx, 0, rz);
 
       // Augen: blinzeln und dem Feuerwerk nachschauen
@@ -189,13 +291,14 @@ export class Kids {
       for (const e of k.eyes) e.scale.set(1 + surprise, 1.2 * blink * (1 + surprise), 0.55);
       const dx = THREE.MathUtils.clamp((m.look.x - k.root.position.x) / 60, -1, 1);
       for (const p of k.pupils) p.position.set(dx * 0.035, 0.035, 0.09);
-      k.mouth.scale.setScalar(1 + 0.5 * energy * b);
+      if (m.rap <= 0) k.mouth.scale.setScalar(1 + 0.5 * energy * b);
 
       // Laterne
       const glow = 1.0 + 0.1 * Math.sin(t * 5 + ph * 9) + (licht < 4 ? 1.3 * Math.exp(-licht * 0.8) : 0) + energy * 0.2;
       k.lanternMat.color.copy(k.lanternBase).multiplyScalar(glow);
       k.lantern.rotation.z = Math.sin(t * 3 + ph * 4) * 0.25;
     }
+    this.updateMantel(t);
     this.light.intensity = 1.2 + 0.08 * Math.sin(t * 7) + (licht < 4 ? 1.8 * Math.exp(-licht) : 0);
 
     // Schwebende Herzen

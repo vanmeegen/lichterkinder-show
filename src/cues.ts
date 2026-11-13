@@ -5,11 +5,12 @@ export const SONG_DURATION = 193.375;
 
 export type CueType =
   | 'herz' | 'lichter' | 'stern' | 'schnee' | 'glocken' | 'lichterkinder'
-  | 'refrain' | 'strophe' | 'ruhig';
+  | 'martin' | 'frieren'
+  | 'refrain' | 'strophe' | 'ruhig' | 'rap';
 
 export const CUE_LABEL: Record<CueType, string> = {
   herz: '❤️ Herz', lichter: '💡 Lichter', stern: '⭐ Stern', schnee: '❄️ Schnee', glocken: '🔔 Glocken',
-  lichterkinder: '🎆 Lichterkinder', refrain: '🎉 Refrain', strophe: '🎵 Strophe', ruhig: '🌙 Ruhig',
+  lichterkinder: '🎆 Lichterkinder', martin: '🧥 St. Martin', frieren: '🥶 Frieren', rap: '🎤 Rap', refrain: '🎉 Refrain', strophe: '🎵 Strophe', ruhig: '🌙 Ruhig',
 };
 
 export interface Line { t: number | null; text: string; }
@@ -37,6 +38,8 @@ export const KEYWORDS: { re: RegExp; type: CueType | 'weihnacht' }[] = [
   { re: /^herz/i, type: 'herz' },
   { re: /^(licht|lichter|kerze|leucht|strahl|glanz|funkel|hell)/i, type: 'lichter' },
   { re: /^stern/i, type: 'stern' },
+  { re: /^(mantel|martin|bettler)/i, type: 'martin' },
+  { re: /^(frier|fror|kalt|kält|frost|bibber|zitter)/i, type: 'frieren' },
   { re: /^(schnee|flock|winter|eis)/i, type: 'schnee' },
   { re: /^(glock|kling|bimm)/i, type: 'glocken' },
   { re: /^(weihnacht|christ|tanne|baum|advent|krippe|engel)/i, type: 'weihnacht' },
@@ -57,10 +60,10 @@ const DEFAULT_EFFECTS: Cue[] = [
   { t: 62, type: 'herz' }, { t: 124, type: 'lichter' }, { t: 176, type: 'lichterkinder' },
 ];
 
-export interface Section { t0: number; t1: number; kind: 'ruhig' | 'strophe' | 'refrain'; }
+export interface Section { t0: number; t1: number; kind: 'ruhig' | 'strophe' | 'refrain' | 'rap'; }
 
 export function sectionsOf(sheet: Sheet): Section[] {
-  let sec = sheet.cues.filter(c => c.type === 'refrain' || c.type === 'strophe' || c.type === 'ruhig');
+  let sec = sheet.cues.filter(c => c.type === 'refrain' || c.type === 'strophe' || c.type === 'ruhig' || c.type === 'rap');
   if (!sec.length) sec = DEFAULT_SECTIONS;
   sec = [...sec].sort((a, b) => a.t - b.t);
   if (sec[0].t > 0.5) sec.unshift({ t: 0, type: 'ruhig' });
@@ -69,7 +72,7 @@ export function sectionsOf(sheet: Sheet): Section[] {
 
 /** Effekt-Marker inkl. automatisch aus Text-Schlüsselwörtern erzeugter. */
 export function effectCues(sheet: Sheet): Cue[] {
-  const fx = sheet.cues.filter(c => !['refrain', 'strophe', 'ruhig'].includes(c.type));
+  const fx = sheet.cues.filter(c => !['refrain', 'strophe', 'ruhig', 'rap'].includes(c.type));
   const auto: Cue[] = [];
   const timed = sheet.lines.filter(l => l.t != null) as { t: number; text: string }[];
   timed.forEach((l, i) => {

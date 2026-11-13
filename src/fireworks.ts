@@ -56,6 +56,17 @@ export function buildSchedule(sheet: Sheet): Burst[] {
     refrain: { iv: 0.5, R: [10, 16], shapes: ['sphere', 'sphere', 'ring', 'star', 'heart', 'tree', 'flake', 'willow', 'palm'] as Shape[] },
   };
   for (const sec of sectionsOf(sheet)) {
+    if (sec.kind === 'rap') {
+      // Im Takt: abwechselnd links/rechts kleine, knackige Bursts
+      const beat = 60 / (sheet.bpm || 100);
+      let k = 0;
+      for (let t = sec.t0; t < Math.min(sec.t1, SONG_DURATION - 1.5); t += beat * 2, k++) {
+        const side = k % 2 ? 1 : -1;
+        add(t, k % 4 === 3 ? 'ring' : 'sphere', { x: side * r(18, 32), y: r(18, 26), R: r(6, 9), crackle: true, c1: k % 2 ? C.cyan : C.pink, c2: C.white });
+        if (k % 8 === 7) add(t + beat, 'star', { x: 0, y: 28, R: 12 });
+      }
+      continue;
+    }
     const p = plan[sec.kind];
     let t = Math.max(sec.t0, sec.kind === 'ruhig' && sec.t0 < 1 ? 7.5 : sec.t0);
     const end = Math.min(sec.t1, SONG_DURATION - 1.5);
@@ -113,6 +124,16 @@ function addEffect(c: Cue, add: (t: number, s: Shape, o?: Partial<Burst>) => voi
     case 'glocken':
       add(t, 'bell', { x: -16, y: 29, R: 12 });
       add(t + 0.3, 'bell', { x: 16, y: 29, R: 12 });
+      break;
+    case 'martin':
+      add(t + 1.0, 'sphere', { x: -14, y: 27, R: 10, c1: C.red, c2: C.gold });
+      add(t + 1.0, 'sphere', { x: 14, y: 27, R: 10, c1: C.red, c2: C.gold });
+      add(t + 2.6, 'heart', { x: 0, y: 31, R: 12 });
+      break;
+    case 'frieren':
+      add(t, 'flake', { x: -20, y: 28, R: 12 });
+      add(t + 0.25, 'flake', { x: 20, y: 28, R: 12 });
+      add(t + 0.5, 'flake', { x: 0, y: 33, R: 15, big: true });
       break;
     case 'lichterkinder':
       add(t, 'text', { text: 'Lichterkinder', x: 0, y: 24, z: BACK_Z + 4, R: 36, c1: [1, 0.6, 0.25], c2: [1, 1, 0.8], crackle: true, big: true });

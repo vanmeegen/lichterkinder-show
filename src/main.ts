@@ -39,11 +39,14 @@ function sheetChanged() {
     sections = sectionsOf(sheet); effects = effectCues(sheet);
     stage.fireworks.rebuild(sheet);
     stage.kids.herzTimes = effects.filter(c => c.type === 'herz').map(c => c.t);
+    stage.kids.martinTimes = effects.filter(c => c.type === 'martin').map(c => c.t);
+    buildFrostEmojis();
     lyrics.reset();
   }, 250);
 }
 stage.fireworks.rebuild(sheet);
 stage.kids.herzTimes = effects.filter(c => c.type === 'herz').map(c => c.t);
+stage.kids.martinTimes = effects.filter(c => c.type === 'martin').map(c => c.t);
 
 // ---------- Hilfen ----------
 let toastTimer = 0;
@@ -79,7 +82,7 @@ async function playFrom(t: number) {
   started = true;
   if (source === 'spotify') await sp.playFrom(t);
   else if (source === 'file') { await fileClock.seek(t); if (!fileClock.playing()) await fileClock.toggle(); }
-  else { await demo.seek(t); if (!demo.playing()) await demo.startNow(); }
+  else { await demo.seek(t); if (t < 0.05) await demo.toggle(); else await demo.startNow(); }
 }
 
 // ---------- Editor ----------
@@ -151,18 +154,49 @@ const tint = document.createElement('div');
 tint.style.cssText = 'position:fixed;inset:0;pointer-events:none;mix-blend-mode:screen;opacity:0;';
 document.body.insertBefore(tint, $('lyrics'));
 
+// ---------- 🥶-Emojis beim Frieren ----------
+interface Pop { el: HTMLSpanElement; t: number; x: number; y: number; rot: number; }
+let pops: Pop[] = [];
+function buildFrostEmojis() {
+  const layer = $('fx-layer'); layer.innerHTML = ''; pops = [];
+  let seed = 7; const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+  for (const c of effects.filter(e => e.type === 'frieren')) {
+    for (let i = 0; i < 16; i++) {
+      const el = document.createElement('span');
+      el.className = 'pop-emoji';
+      el.textContent = i % 3 === 0 ? '❄️' : i % 5 === 1 ? '🧊' : '🥶';
+      layer.appendChild(el);
+      pops.push({ el, t: c.t + i * 0.12 + rnd() * 0.15, x: 6 + rnd() * 88, y: 35 + rnd() * 45, rot: (rnd() - 0.5) * 40 });
+    }
+  }
+}
+function updateFrostEmojis(t: number) {
+  for (const p of pops) {
+    const a = t - p.t;
+    if (a < 0 || a > 3.2) { p.el.style.opacity = '0'; continue; }
+    const pop = a < 0.25 ? a / 0.25 * 1.3 : a < 0.4 ? 1.3 - (a - 0.25) / 0.15 * 0.3 : 1;
+    const shake = Math.sin(a * 60) * 4 * Math.min(1, a);
+    p.el.style.opacity = String(Math.min(1, (3.2 - a) / 0.6));
+    p.el.style.transform = `translate(-50%,-50%) translate(${shake}px, ${-a * 40}px) rotate(${p.rot + shake}deg) scale(${pop})`;
+    p.el.style.left = p.x + 'vw'; p.el.style.top = p.y + 'vh';
+  }
+}
+buildFrostEmojis();
+
 // ---------- Hauptschleife ----------
 function mood(t: number) {
   const sec = sections.find(s => t >= s.t0 && t < s.t1) ?? sections[0];
-  const target = sec.kind === 'refrain' ? 1 : sec.kind === 'strophe' ? 0.45 : 0.12;
+  const lvl = (k: string) => (k === 'refrain' ? 1 : k === 'rap' ? 0.8 : k === 'strophe' ? 0.45 : 0.12);
+  const target = lvl(sec.kind);
   // weicher Übergang 1,5 s
   const prev = sections[sections.indexOf(sec) - 1];
-  const pv = prev ? (prev.kind === 'refrain' ? 1 : prev.kind === 'strophe' ? 0.45 : 0.12) : target;
+  const pv = prev ? lvl(prev.kind) : target;
+  const rapIn = sec.kind === 'rap' ? Math.min(1, (t - sec.t0) / 0.5, (sec.t1 - t) / 0.5) : 0;
   const k = Math.min(1, (t - sec.t0) / 1.5);
   const energy = pv + (target - pv) * k;
   const since: Record<string, number> = {};
   for (const c of effects) if (c.t <= t) since[c.type] = t - c.t;
-  return { t, beat: (t * sheet.bpm) / 60, energy, since };
+  return { t, beat: (t * sheet.bpm) / 60, energy, rap: Math.max(0, rapIn), since };
 }
 
 function frame() {
@@ -189,7 +223,10 @@ function frame() {
   if (herz < 3) { tint.style.background = 'radial-gradient(ellipse at center, transparent 35%, rgba(255,40,110,.55))'; tint.style.opacity = String(Math.exp(-herz * 1.1) * 0.45); }
   else if (licht < 3) { tint.style.background = 'radial-gradient(ellipse at 50% 100%, rgba(255,200,90,.6), transparent 60%)'; tint.style.opacity = String(Math.exp(-licht * 1.1) * 0.45); }
   else if (lk < 4) { tint.style.background = 'radial-gradient(ellipse at 50% 40%, rgba(255,255,220,.8), transparent 55%)'; tint.style.opacity = String(Math.exp(-lk * 2.2) * 0.4); }
+  else if ((m.since.frieren ?? 99) < 4) { const fr = m.since.frieren; tint.style.background = 'radial-gradient(ellipse at center, transparent 40%, rgba(120,200,255,.75))'; tint.style.opacity = String(Math.min(1, fr / 0.3) * Math.min(1, (4 - fr) / 1) * 0.6); }
+  else if ((m.since.martin ?? 99) < 2) { const mt = m.since.martin; tint.style.background = 'radial-gradient(ellipse at 50% 60%, rgba(255,90,60,.5), transparent 60%)'; tint.style.opacity = String(Math.exp(-mt * 1.5) * 0.5); }
   else tint.style.opacity = '0';
+  updateFrostEmojis(t);
 
   requestAnimationFrame(frame);
 }

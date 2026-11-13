@@ -2,7 +2,7 @@
 import { Sheet, CueType, CUE_LABEL, saveSheet, emptySheet, fmtTime } from './cues';
 
 const KEYMAP: Record<string, CueType> = {
-  r: 'refrain', v: 'strophe', p: 'ruhig', h: 'herz', l: 'lichter', s: 'stern', n: 'schnee', g: 'glocken', k: 'lichterkinder',
+  r: 'refrain', v: 'strophe', p: 'ruhig', y: 'rap', m: 'martin', f: 'frieren', h: 'herz', l: 'lichter', s: 'stern', n: 'schnee', g: 'glocken', k: 'lichterkinder',
 };
 
 type Undo = { kind: 'line'; idx: number } | { kind: 'cue' };

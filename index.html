@@ -82,8 +82,9 @@
       <p class="hint">Lied von vorn starten und mitdrücken:</p>
       <ul class="keys">
         <li><kbd>Enter</kbd> nächste Textzeile beginnt</li>
-        <li><kbd>R</kbd> Refrain (viel Feuerwerk) · <kbd>V</kbd> Strophe (ruhiger) · <kbd>P</kbd> ganz ruhig</li>
+        <li><kbd>R</kbd> Refrain (viel Feuerwerk) · <kbd>V</kbd> Strophe (ruhiger) · <kbd>P</kbd> ganz ruhig · <kbd>Y</kbd> Rap-Teil</li>
         <li><kbd>H</kbd> Herz · <kbd>L</kbd> Lichter · <kbd>S</kbd> Stern · <kbd>N</kbd> Schnee · <kbd>G</kbd> Glocken</li>
+        <li><kbd>M</kbd> St. Martin (Mantel wird geteilt) · <kbd>F</kbd> Frieren 🥶</li>
         <li><kbd>K</kbd> „Lichterkinder“-Höhepunkt (Riesenfeuerwerk)</li>
         <li><kbd>T</kbd> im Takt tippen (misst das Tempo)</li>
         <li><kbd>Backspace</kbd> letzten Eintrag zurücknehmen</li>
@@ -101,8 +102,8 @@
         <select id="ed-add-type">
           <option value="herz">Herz</option><option value="lichter">Lichter</option>
           <option value="stern">Stern</option><option value="schnee">Schnee</option>
-          <option value="glocken">Glocken</option><option value="lichterkinder">Lichterkinder</option>
-          <option value="refrain">Refrain</option><option value="strophe">Strophe</option><option value="ruhig">Ruhig</option>
+          <option value="glocken">Glocken</option><option value="martin">St. Martin</option><option value="frieren">Frieren</option><option value="lichterkinder">Lichterkinder</option>
+          <option value="refrain">Refrain</option><option value="rap">Rap</option><option value="strophe">Strophe</option><option value="ruhig">Ruhig</option>
         </select>
         <button id="ed-add">+ Effekt bei aktueller Zeit</button>
       </div>
@@ -125,6 +126,7 @@
     </div>
   </div>
   <div id="countdown"></div>
+  <div id="fx-layer"></div>
   <div id="toast"></div>
   <script type="module" src="./src/main.ts"></script>
 </body>
