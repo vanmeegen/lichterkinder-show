@@ -37,18 +37,21 @@ const KEY = 'lk-sheet-v1';
 // konstant 80 BPM, erster Schlag bei 3,334 s, Abschnitte auf dem Taktraster, Musik endet ~3:55.
 export const SONG_BPM = 80, SONG_OFFSET = 3.334, SONG_END = 235.5;
 export function defaultCues(): Cue[] {
-  return [
+  const sec: Cue[] = [
     { t: 0, type: 'ruhig' }, { t: 3.33, type: 'strophe' }, { t: 27.33, type: 'refrain' }, { t: 49.83, type: 'rap' },
     { t: 75.33, type: 'refrain' }, { t: 100.83, type: 'rap' }, { t: 123.33, type: 'refrain' }, { t: 147.33, type: 'strophe' },
     { t: 171.33, type: 'refrain' }, { t: 195.33, type: 'ruhig' }, { t: 198.33, type: 'refrain' }, { t: 222.33, type: 'strophe' },
     { t: 228.33, type: 'ruhig' },
-    { t: 15.33, type: 'stern' }, { t: 27.33, type: 'lichter' }, { t: 39.33, type: 'herz' },
-    { t: 75.33, type: 'lichter' }, { t: 87.33, type: 'schnee' },
-    { t: 123.33, type: 'lichter' }, { t: 135.33, type: 'herz' },
-    { t: 148.83, type: 'martin' }, { t: 160.83, type: 'frieren' },
-    { t: 171.33, type: 'glocken' }, { t: 183.33, type: 'stern' },
-    { t: 198.33, type: 'lichterkinder' }, { t: 210.33, type: 'herz' }, { t: 216.33, type: 'lichter' },
   ];
+  // Refrain: beginnt mit „Lichterkinder“, dann Sterne, St. Martin, Herzen – je ein Takt (3 s), zweimal.
+  const fx: Cue[] = [];
+  for (const r of [27.33, 75.33, 123.33, 198.33]) {
+    fx.push({ t: r, type: 'lichterkinder' }, { t: r + 3, type: 'stern' }, { t: r + 6, type: 'martin' }, { t: r + 9, type: 'herz' },
+      { t: r + 12, type: 'lichter' }, { t: r + 15, type: 'stern' }, { t: r + 21, type: 'herz' });
+  }
+  fx.push({ t: 171.33, type: 'lichter' }, { t: 183.33, type: 'glocken' }, { t: 15.33, type: 'lichter' },
+    { t: 150.33, type: 'schnee' }, { t: 160.83, type: 'frieren' });
+  return [...sec, ...fx];
 }
 export function emptySheet(): Sheet { return { lines: [], cues: defaultCues(), bpm: SONG_BPM, offset: SONG_OFFSET, end: SONG_END }; }
 
@@ -56,7 +59,9 @@ export function loadSheet(): Sheet {
   try {
     const s = JSON.parse(localStorage.getItem(KEY) || 'null');
     if (s && Array.isArray(s.lines) && Array.isArray(s.cues)) {
-      if (!s.cues.length) { s.cues = defaultCues(); s.bpm = SONG_BPM; s.offset = SONG_OFFSET; s.end = SONG_END; }
+      // leer oder noch der ältere Standard-Ablauf → aktuellen Standard nehmen
+      const oldDefault = s.cues.some((c: Cue) => c.type === 'martin' && Math.abs(c.t - 148.83) < 0.01);
+      if (!s.cues.length || oldDefault) { s.cues = defaultCues(); s.bpm = SONG_BPM; s.offset = SONG_OFFSET; s.end = SONG_END; }
       return { bpm: SONG_BPM, offset: SONG_OFFSET, end: SONG_END, ...s };
     }
   } catch { /* ignore */ }
