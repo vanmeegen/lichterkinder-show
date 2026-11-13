@@ -1,0 +1,100 @@
+// Datenmodell: Textzeilen + Effekt-Marker. Liegt nur im Browser (localStorage) bzw. in einer Export-Datei.
+
+export const TRACK_URI = 'spotify:track:7CWo5QLZYtAPLwHrquNErG';
+export const SONG_DURATION = 193.375;
+
+export type CueType =
+  | 'herz' | 'lichter' | 'stern' | 'schnee' | 'glocken' | 'lichterkinder'
+  | 'refrain' | 'strophe' | 'ruhig';
+
+export const CUE_LABEL: Record<CueType, string> = {
+  herz: '❤️ Herz', lichter: '💡 Lichter', stern: '⭐ Stern', schnee: '❄️ Schnee', glocken: '🔔 Glocken',
+  lichterkinder: '🎆 Lichterkinder', refrain: '🎉 Refrain', strophe: '🎵 Strophe', ruhig: '🌙 Ruhig',
+};
+
+export interface Line { t: number | null; text: string; }
+export interface Cue { t: number; type: CueType; }
+export interface Sheet { lines: Line[]; cues: Cue[]; bpm: number; }
+
+const KEY = 'lk-sheet-v1';
+
+export function emptySheet(): Sheet { return { lines: [], cues: [], bpm: 100 }; }
+
+export function loadSheet(): Sheet {
+  try {
+    const s = JSON.parse(localStorage.getItem(KEY) || 'null');
+    if (s && Array.isArray(s.lines) && Array.isArray(s.cues)) return { bpm: 100, ...s };
+  } catch { /* ignore */ }
+  return emptySheet();
+}
+export function saveSheet(s: Sheet) {
+  try { localStorage.setItem(KEY, JSON.stringify(s)); } catch { /* ignore */ }
+}
+
+// ---- Schlüsselwörter im Text -> Effekte ----
+export const KEYWORDS: { re: RegExp; type: CueType | 'weihnacht' }[] = [
+  { re: /^lichterkind/i, type: 'lichterkinder' },
+  { re: /^herz/i, type: 'herz' },
+  { re: /^(licht|lichter|kerze|leucht|strahl|glanz|funkel|hell)/i, type: 'lichter' },
+  { re: /^stern/i, type: 'stern' },
+  { re: /^(schnee|flock|winter|eis)/i, type: 'schnee' },
+  { re: /^(glock|kling|bimm)/i, type: 'glocken' },
+  { re: /^(weihnacht|christ|tanne|baum|advent|krippe|engel)/i, type: 'weihnacht' },
+];
+export function keywordOf(word: string): CueType | 'weihnacht' | null {
+  const w = word.replace(/^[^\p{L}]+/u, '');
+  for (const k of KEYWORDS) if (k.re.test(w)) return k.type;
+  return null;
+}
+
+// ---- Abschnitte / Energie ----
+// Standard-Ablauf, solange keine eigenen Marker gesetzt sind.
+const DEFAULT_SECTIONS: Cue[] = [
+  { t: 0, type: 'ruhig' }, { t: 14, type: 'strophe' }, { t: 46, type: 'refrain' }, { t: 78, type: 'strophe' },
+  { t: 108, type: 'refrain' }, { t: 140, type: 'ruhig' }, { t: 158, type: 'refrain' },
+];
+const DEFAULT_EFFECTS: Cue[] = [
+  { t: 62, type: 'herz' }, { t: 124, type: 'lichter' }, { t: 176, type: 'lichterkinder' },
+];
+
+export interface Section { t0: number; t1: number; kind: 'ruhig' | 'strophe' | 'refrain'; }
+
+export function sectionsOf(sheet: Sheet): Section[] {
+  let sec = sheet.cues.filter(c => c.type === 'refrain' || c.type === 'strophe' || c.type === 'ruhig');
+  if (!sec.length) sec = DEFAULT_SECTIONS;
+  sec = [...sec].sort((a, b) => a.t - b.t);
+  if (sec[0].t > 0.5) sec.unshift({ t: 0, type: 'ruhig' });
+  return sec.map((c, i) => ({ t0: c.t, t1: i + 1 < sec.length ? sec[i + 1].t : SONG_DURATION + 5, kind: c.type as Section['kind'] }));
+}
+
+/** Effekt-Marker inkl. automatisch aus Text-Schlüsselwörtern erzeugter. */
+export function effectCues(sheet: Sheet): Cue[] {
+  const fx = sheet.cues.filter(c => !['refrain', 'strophe', 'ruhig'].includes(c.type));
+  const auto: Cue[] = [];
+  const timed = sheet.lines.filter(l => l.t != null) as { t: number; text: string }[];
+  timed.forEach((l, i) => {
+    const words = l.text.split(/\s+/);
+    const dur = Math.min(6, (timed[i + 1]?.t ?? l.t + 4) - l.t);
+    words.forEach((w, wi) => {
+      const k = keywordOf(w);
+      if (k && k !== 'weihnacht') auto.push({ t: l.t + dur * (wi / Math.max(1, words.length)) + 0.1, type: k });
+    });
+  });
+  let all = [...fx, ...auto];
+  if (!sheet.cues.length && !timed.length) all = DEFAULT_EFFECTS;
+  all.sort((a, b) => a.t - b.t);
+  // gleichartige Effekte innerhalb von 2,5 s zusammenfassen
+  const out: Cue[] = [];
+  for (const c of all) {
+    const prev = [...out].reverse().find(o => o.type === c.type);
+    if (prev && c.t - prev.t < 2.5) continue;
+    out.push(c);
+  }
+  return out;
+}
+
+export function fmtTime(t: number) {
+  t = Math.max(0, t);
+  const m = Math.floor(t / 60), s = Math.floor(t % 60);
+  return `${m}:${s.toString().padStart(2, '0')}`;
+}
