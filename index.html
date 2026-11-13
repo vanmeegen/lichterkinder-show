@@ -53,9 +53,8 @@
       <p class="hint">Rücksprung-Adresse für das Spotify-Dashboard:<br /><code id="redirect-uri"></code></p>
     </div>
     <div id="file-box">
-      <div class="row"><button id="btn-pick-file">Musikdatei wählen…</button></div>
+      <label class="filebtn">🎵 Musikdatei wählen…<input id="audio-file" type="file" accept=".mp3,.m4a,.aac,.wav,.ogg,.flac,audio/mpeg,audio/mp4,audio/*" /></label>
       <p class="hint" id="file-name">Noch keine Datei gewählt.</p>
-      <input id="audio-file" type="file" accept="audio/*" hidden />
     </div>
     <div id="demo-box"><p class="hint">Die Show startet mit einem Countdown 3 – 2 – 1. Bei „Los!“ die Musik am anderen Gerät starten.</p></div>
     <label>Verzögerung (Bluetooth): <b id="lat-val">0</b> ms
@@ -125,7 +124,7 @@
     <div class="box">
       <h3>Wie soll die Musik laufen?</h3>
       <button data-src="spotify">🎵 Mit Spotify<br><small>Lied läuft in der Show, immer synchron (Premium)</small></button>
-      <button data-src="file">📁 Eigene Musikdatei<br><small>mp3/m4a vom Laptop, immer synchron</small></button>
+      <label class="choice">📁 Eigene Musikdatei<br><small>mp3/m4a vom Laptop, immer synchron</small><input id="chooser-file" type="file" accept=".mp3,.m4a,.aac,.wav,.ogg,.flac,audio/mpeg,audio/mp4,audio/*" /></label>
       <button data-src="demo">⏱️ Ohne Ton<br><small>Countdown, dann Musik woanders starten</small></button>
     </div>
   </div>

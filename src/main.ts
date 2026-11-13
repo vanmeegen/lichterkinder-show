@@ -70,7 +70,7 @@ async function setSource(s: Source) {
 function ready(): boolean {
   if (!chosen) { $('chooser').classList.remove('hidden'); return false; }
   if (source === 'spotify' && !isLoggedIn()) { openSettings(); toast('Bitte zuerst bei Spotify anmelden – oder unter „Abspielquelle“ ohne Spotify starten', 4500); return false; }
-  if (source === 'file' && !fileClock.hasFile()) { $('audio-file').click(); return false; }
+  if (source === 'file' && !fileClock.hasFile()) { $('chooser').classList.remove('hidden'); return false; }
   return true;
 }
 async function startOrToggle() {
@@ -113,14 +113,20 @@ function syncSettingsUi() {
 $('btn-settings').onclick = () => { syncSettingsUi(); $('settings').classList.toggle('hidden'); };
 $('btn-close-settings').onclick = () => $('settings').classList.add('hidden');
 $('set-source').onchange = () => setSource(($('set-source') as HTMLSelectElement).value as Source);
-$('btn-pick-file').onclick = () => $('audio-file').click();
-$('audio-file').onchange = async () => {
-  const f = ($('audio-file') as HTMLInputElement).files?.[0]; if (!f) return;
+async function useFile(input: HTMLInputElement) {
+  const f = input.files?.[0]; if (!f) return;
   fileClock.setFile(f, f.name); storeAudio(f, f.name);
-  if (source !== 'file') await setSource('file');
+  if (source !== 'file' || !chosen) await setSource('file');
   syncSettingsUi(); toast('🎵 ' + f.name);
+  input.value = '';
+}
+$('audio-file').onchange = () => useFile($('audio-file') as HTMLInputElement);
+$('chooser-file').onchange = async () => {
+  $('chooser').classList.add('hidden');
+  await useFile($('chooser-file') as HTMLInputElement);
+  if (fileClock.hasFile()) toast('🎵 Musik geladen – jetzt ▶ Start drücken', 3500);
 };
-document.querySelectorAll<HTMLButtonElement>('#chooser button').forEach(b => b.onclick = async () => {
+document.querySelectorAll<HTMLButtonElement>('#chooser button[data-src]').forEach(b => b.onclick = async () => {
   $('chooser').classList.add('hidden');
   await setSource(b.dataset.src as Source);
   if (ready()) startOrToggle();

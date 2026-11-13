@@ -73,6 +73,10 @@ kbd { background: #fff; color: #111; border-radius: 4px; padding: 0 6px; font-we
 #chooser .box { background: rgba(12,16,44,.95); border: 1px solid rgba(255,255,255,.15); border-radius: 18px; padding: 22px; width: min(460px, 92vw); display: flex; flex-direction: column; gap: 10px; }
 #chooser h3 { margin: 0 0 6px; text-align: center; }
 #chooser button { text-align: left; padding: 12px 14px; font-size: 18px; }
+.filebtn, .choice { position: relative; display: block; cursor: pointer; background: #26306a; border: 1px solid rgba(255,255,255,.18); border-radius: 10px; padding: 10px 14px; font-weight: 700; margin-top: 10px; }
+.choice { font-size: 18px; margin-top: 0; }
+.filebtn:hover, .choice:hover { background: #33418c; }
+.filebtn input, .choice input { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; }
 #chooser small { font-weight: 500; opacity: .75; font-size: 13px; }
 #countdown { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; pointer-events: none; font-size: clamp(120px, 26vw, 360px); font-weight: 900; color: #fff3d0; text-shadow: 0 0 40px #ffb347, 0 0 90px #ff7a00; opacity: 0; }
 #countdown.on { opacity: 1; }
