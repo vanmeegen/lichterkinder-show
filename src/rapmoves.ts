@@ -49,15 +49,15 @@ function air(b: number, d: number, h: number): Air {
   const D = d * SPB, T = Math.min(D * 0.75, Math.sqrt((8 * h) / GRAV));
   const C = Math.min(0.3, Math.max(0.12, (D - T) * 0.6)); // Ausholen
   const t = b * SPB;
-  if (t < C) { const s = Math.sin(Math.PI * (t / C)); return { y: -0.1 * s, k: 0, squash: 1 - 0.22 * s, phase: 0 }; }
+  if (t < C) { const s = Math.sin(Math.PI * (t / C)); return { y: 0, k: 0, squash: 1 - 0.22 * s, phase: 0 }; }
   const tt = t - C;
   if (tt < T) {
     const v0 = (GRAV * T) / 2;
-    return { y: v0 * tt - (GRAV * tt * tt) / 2, k: tt / T, squash: 1 + 0.1 * Math.max(0, 1 - tt / (0.25 * T)), phase: 1 };
+    return { y: v0 * tt - (GRAV * tt * tt) / 2, k: tt / T, squash: 1 + 0.05 * Math.max(0, 1 - tt / (0.25 * T)), phase: 1 };
   }
   const tl = tt - T; // Landung: abfedern wie eine gedämpfte Feder
   const e = Math.exp(-tl * 9);
-  return { y: -0.09 * e * Math.sin(Math.min(Math.PI, tl * 16)), k: 1, squash: 1 - 0.24 * e * Math.cos(tl * 12), phase: 2 };
+  return { y: 0, k: 1, squash: 1 - 0.24 * e * Math.cos(tl * 12), phase: 2 };
 }
 /** Arme beim Sprung: Ausholen nach hinten, in der Luft `inAir`, bei der Landung zur Balance seitlich. */
 function jumpArms(a: Air, inAir: Pose): Pose {
@@ -91,8 +91,16 @@ const cartwheel = (b: number, dir: number, d = 2): Solo => {
   const u = cl(b / d), th = TAU * trap(u, 0.1);
   return { pose: both(arm(0, -2.6)), srz: -dir * th, dx: dir * (1.1 * u - 0.55), y: 0.45 * Math.abs(Math.sin(th / 2)), spread: Math.sin(Math.PI * u) };
 };
-const prep = (b: number): Solo => ({ pose: both(arm(0.5, -0.35, -0.3)), squash: 1 - 0.2 * Math.sin(Math.PI * cl(b)), y: -0.08 * Math.sin(Math.PI * cl(b)) });
-const land = (b: number, p: Pose = both(V)): Solo => { const e = Math.exp(-b * SPB * 8); return { pose: p, squash: 1 - 0.2 * e * Math.cos(b * SPB * 12), y: -0.05 * e }; };
+/** Ballistischer Hüpfer pro Periode (in Schlägen): erst Bodenkontakt, dann Wurfparabel mit Höhe h, Landung auf dem Schlag. */
+export function hopY(g: number, h: number, per = 1) {
+  const P = per * SPB, T = Math.min(0.9 * P, Math.sqrt((8 * h) / GRAV));
+  const t = (((g / per) % 1 + 1) % 1) * P, t0 = P - T;
+  if (t < t0) return 0;
+  const tt = t - t0, v0 = (GRAV * T) / 2;
+  return v0 * tt - (GRAV * tt * tt) / 2;
+}
+const prep = (b: number): Solo => ({ pose: both(arm(0.5, -0.35, -0.3)), squash: 1 - 0.2 * Math.sin(Math.PI * cl(b)), y: 0 });
+const land = (b: number, p: Pose = both(V)): Solo => { const e = Math.exp(-b * SPB * 8); return { pose: p, squash: 1 - 0.2 * e * Math.cos(b * SPB * 12), y: 0 }; };
 const groundSpin = (b: number, d: number, turns: number) => TAU * turns * trap(b / d);
 
 export function mixArm(a: Arm, b: Arm, k: number): Arm { return { sx: L(a.sx, b.sx, k), sz: L(a.sz, b.sz, k), ex: L(a.ex, b.ex, k), ez: L(a.ez, b.ez, k) }; }
@@ -112,14 +120,14 @@ export function mixSolo(a: Solo, b: Solo, k: number): Solo {
 
 export const ROUTINES: Routine[] = [
   { name: 'Breakdance', steps: [
-    { beats: 2, f: (b, g) => ({ pose: both(arm(-0.6, -0.4, -1.2)), squash: 0.88, y: -0.05 * hitEnv(g), srx: -0.3 * outCubic(b / 1.5), legL: hitEnv(g) * 0.6 }) },
+    { beats: 2, f: (b, g) => ({ pose: both(arm(-0.6, -0.4, -1.2)), squash: 0.88 - 0.05 * hitEnv(g), y: 0, srx: -0.3 * outCubic(b / 1.5), legL: hitEnv(g) * 0.6 }) },
     { beats: 4, f: b => ({ pose: both(OUT), srx: -1.35, y: -0.48, spin: groundSpin(b, 4, 3), legL: 1, legR: 1, spread: 1 }) },
     { beats: 4, f: b => ({ pose: both(arm(0, -2.2, 0, 0.4)), srz: Math.PI, y: 0.22, spin: groundSpin(b, 4, 3.5), spread: 1 }) },
     { beats: 2, f: () => ({ pose: LR(GROUND, arm(-0.5, -1.2, -1.4)), srz: 1.9, y: -0.12, legL: 1 }) },
     { beats: 2, f: b => { const up = outCubic(b / 0.5); const a = air(Math.max(0, b - 0.3), 1.2, 0.45); return { pose: both(V), srx: -1.35 * (1 - up), y: L(-0.48, 0, up) + Math.max(0, a.y), squash: a.squash }; } }, // Kip-up
   ] },
   { name: 'Flickflack-Serie', steps: [
-    { beats: 2, f: (b, g) => ({ pose: both(arm(-0.3 * swing(g, 1), -0.3, -1.2)), dz: 0.15 * b, y: 0.07 * Math.abs(swing(g, 1)), legL: bump(2 * g), legR: 1 - bump(2 * g) }) },
+    { beats: 2, f: (b, g) => ({ pose: both(arm(-0.3 * swing(g, 1), -0.3, -1.2)), dz: 0.15 * b, y: hopY(g, 0.06, 0.5), legL: bump(2 * g), legR: 1 - bump(2 * g) }) },
     { beats: 1.5, f: (b) => ({ ...backflip(b, 1.5), dz: 0.3 - 0.6 * air(b, 1.5, 0.75).k }) },
     { beats: 1.5, f: (b) => ({ ...backflip(b, 1.5), dz: -0.3 - 0.6 * air(b, 1.5, 0.75).k }) },
     { beats: 2, f: b => ({ ...spinJump(b, 1, 1.6, 0.8, both(UP)), dz: -0.9 }) },
@@ -135,18 +143,18 @@ export const ROUTINES: Routine[] = [
   ] },
   { name: 'Moonwalk', steps: [
     { beats: 4, f: (b, g) => { const s = Math.floor(2 * g) % 2; return { pose: LR(arm(0.3 * swing(g, 1), -0.25, -0.6), arm(-0.3 * swing(g, 1), -0.25, -0.6)), dz: 0.5 - 0.35 * b, legL: s ? 0.6 : 0, legR: s ? 0 : 0.6, rx: -0.08 }; } },
-    { beats: 2, f: b => ({ pose: LR(arm(-0.2, -2.5, -0.3, -1.3), arm(0, -0.6)), spin: groundSpin(b, 1.6, 2), y: 0.06, dz: -0.9, legL: 0.4 }) },
+    { beats: 2, f: b => ({ pose: LR(arm(-0.2, -2.5, -0.3, -1.3), arm(0, -0.6)), spin: groundSpin(b, 1.6, 2), squash: 1.05, dz: -0.9, legL: 0.4 }) },
     { beats: 4, f: (b, g) => { const s = Math.floor(2 * g) % 2; return { pose: both(arm(-0.3, -0.5, -0.8)), dx: 0.6 - 0.3 * b, dz: -0.9, ry: -0.6, legL: s ? 0.6 : 0, legR: s ? 0 : 0.6 }; } },
-    { beats: 2, f: b => ({ pose: LR(arm(-0.3, -2.5, -0.4, -1.4), HIP), dx: -0.6, dz: -0.9, rz: -0.12 * outCubic(b / 0.3), legR: 0.5 * outCubic(b / 0.3), y: 0.12 * outCubic(b / 0.3) }) },
+    { beats: 2, f: b => ({ pose: LR(arm(-0.3, -2.5, -0.4, -1.4), HIP), dx: -0.6, dz: -0.9, rz: -0.12 * outCubic(b / 0.3), legR: 0.5 * outCubic(b / 0.3), squash: 1 + 0.06 * outCubic(b / 0.3) }) },
   ] },
   { name: 'Electric (Popping)', steps: [
     { beats: 4, f: (b, g) => { const q = Math.floor(4 * g); const tw = (k: number) => Math.sin(q * 12.9898 + k) * 0.5; return { pose: LR(arm(-0.6 + tw(1), -0.9 + tw(2), -1.2 + tw(3)), arm(-0.6 + tw(4), -0.9 + tw(5), -1.2 + tw(6))), rz: 0.1 * tw(7), rx: 0.1 * tw(8), squash: 1 + 0.06 * tw(9) }; } },
-    { beats: 4, f: (b, g) => { const w = (o: number) => ss(Math.sin(Math.PI * g - o) * 0.5 + 0.5); return { pose: LR(arm(0, -1.55, 0, -1.4 * w(0)), arm(0, -1.55, 0, 1.4 * w(1.5))), rz: 0.15 * (w(0.75) - 0.5), y: 0.04 * w(0.75) }; } },
-    { beats: 3, f: b => { const shake = Math.sin(b * 90) * 0.06; return { pose: both(arm(0, -2.6 + shake * 3, 0, shake * 4)), spin: groundSpin(b, 3, 1.5), rz: shake, y: 0.1 + shake, squash: 1 + shake }; } },
+    { beats: 4, f: (b, g) => { const w = (o: number) => ss(Math.sin(Math.PI * g - o) * 0.5 + 0.5); return { pose: LR(arm(0, -1.55, 0, -1.4 * w(0)), arm(0, -1.55, 0, 1.4 * w(1.5))), rz: 0.15 * (w(0.75) - 0.5), squash: 1 + 0.05 * (w(0.75) - 0.5) }; } },
+    { beats: 3, f: b => { const shake = Math.sin(b * 90) * 0.06; return { pose: both(arm(0, -2.6 + shake * 3, 0, shake * 4)), spin: groundSpin(b, 3, 1.5), rz: shake, y: 0, squash: 1.04 + shake * 0.5 }; } },
     { beats: 2, f: () => ({ pose: LR(arm(-1.55, 0, -1.55), arm(0, -1.55, 0, -1.55)), ry: 0.5, squash: 0.95 }) },
   ] },
   { name: 'Windmill', steps: [
-    { beats: 1.5, f: b => ({ pose: both(arm(-0.8, -0.3, -0.8)), squash: L(1, 0.7, outCubic(b / 1)), y: -0.2 * outCubic(b / 1) }) },
+    { beats: 1.5, f: b => ({ pose: both(arm(-0.8, -0.3, -0.8)), squash: L(1, 0.7, outCubic(b / 1)), y: 0 }) },
     { beats: 6, f: b => { const a = TAU * 0.9 * b; return { pose: LR(arm(0, -1.5 - 0.6 * Math.sin(a)), arm(0, -1.5 + 0.6 * Math.sin(a))), srx: -1.3, srz: 0.55 * Math.sin(a), y: -0.45, spin: a, legL: 1, legR: 1, spread: 1 }; } },
     { beats: 2, f: () => ({ pose: LR(GROUND, arm(-1.4, 0.3, -1.6)), srz: 1.3, srx: -0.3, y: -0.3, legL: 1, legR: 0.6 }) },
     { beats: 2, f: b => spinJump(b, 1, 2, 0.75) },
@@ -159,15 +167,15 @@ export const ROUTINES: Routine[] = [
     { beats: 2, f: b => land(b) },
   ] },
   { name: 'Salto & Spagat', steps: [
-    { beats: 2, f: (b, g) => ({ pose: both(arm(-0.6, -0.6, -1.0)), dz: -0.4 + 0.2 * b, y: 0.07 * Math.abs(swing(g, 1)), legL: bump(2 * g), legR: 1 - bump(2 * g) }) },
+    { beats: 2, f: (b, g) => ({ pose: both(arm(-0.6, -0.6, -1.0)), dz: -0.4 + 0.2 * b, y: hopY(g, 0.06, 0.5), legL: bump(2 * g), legR: 1 - bump(2 * g) }) },
     { beats: 2, f: b => frontflip(b, 2) },
     { beats: 1.5, f: b => { const a = air(b, 1.5, 0.7); const s = a.phase === 1 ? Math.sin(Math.PI * a.k) : 0; return { pose: jumpArms(a, both(OUT)), y: a.y, squash: a.squash, spread: s, legL: 0.8 * s, legR: 0.8 * s }; } },
-    { beats: 2.5, f: b => ({ pose: both(arm(0, -2.3)), y: -0.38 * outCubic(b / 0.4), squash: L(1, 0.78, outCubic(b / 0.4)), spread: 1 }) },
+    { beats: 2.5, f: b => ({ pose: both(arm(0, -2.3)), y: -0.16 * outCubic(b / 0.4), squash: L(1, 0.85, outCubic(b / 0.4)), spread: 1 }) },
     { beats: 1.5, f: b => ({ ...spinJump(b, 0, 1.5, 0.45, both(V)), spread: 0 }) },
   ] },
   { name: 'Air Flare', steps: [
-    { beats: 1.5, f: b => ({ pose: both(arm(-0.8, -0.3, -0.8)), squash: L(1, 0.75, outCubic(b)), y: -0.15 * outCubic(b) }) },
-    { beats: 6, f: (b, g) => ({ pose: LR(GROUND, arm(0, -1.6)), srz: 1.2 + 0.25 * Math.sin(TAU * b), srx: -0.4, y: 0.15 + 0.35 * Math.abs(Math.sin(Math.PI * b)), spin: TAU * 0.75 * b, spread: 1, legL: 1, legR: 1 }) },
+    { beats: 1.5, f: b => ({ pose: both(arm(-0.8, -0.3, -0.8)), squash: L(1, 0.75, outCubic(b)), y: 0 }) },
+    { beats: 6, f: (b, g) => ({ pose: LR(GROUND, arm(0, -1.6)), srz: 1.2 + 0.25 * Math.sin(TAU * b), srx: -0.4, y: 0.15 + hopY(b, 0.3, 1), spin: TAU * 0.75 * b, spread: 1, legL: 1, legR: 1 }) },
     { beats: 2, f: b => { const a = air(b, 2, 0.6); return { pose: jumpArms(a, both(OUT)), srz: 1.2 * (1 - outCubic(b / 0.4)), y: a.y, squash: a.squash, spin: TAU * a.k }; } },
     { beats: 1.5, f: b => land(b) },
   ] },
@@ -194,21 +202,21 @@ export const ROUTINES: Routine[] = [
     { beats: 2, f: b => ({ ...spinJump(b, 1, 2, 0.65), dx: 0.9, dz: 0.6 }) },
   ] },
   { name: 'Beinkreisel', steps: [
-    { beats: 1.5, f: b => ({ pose: both(arm(-0.6, -0.4, -1)), squash: L(1, 0.62, outCubic(b)), y: -0.28 * outCubic(b) }) },
-    { beats: 6, f: b => ({ pose: LR(GROUND, arm(-0.4, -1.3)), squash: 0.62, y: -0.28, spin: TAU * 0.8 * b, rz: 0.35, legL: 1, spread: 1 }) },
+    { beats: 1.5, f: b => ({ pose: both(arm(-0.6, -0.4, -1)), squash: L(1, 0.62, outCubic(b)), y: 0 }) },
+    { beats: 6, f: b => ({ pose: LR(GROUND, arm(-0.4, -1.3)), squash: 0.62, y: 0, spin: TAU * 0.8 * b, rz: 0.35, legL: 1, spread: 1 }) },
     { beats: 2, f: b => spinJump(b, 1.5, 2, 0.85, both(arm(0, -2.7))) },
     { beats: 1.5, f: b => land(b, LR(HIP, arm(-0.3, -2.6))) },
   ] },
   { name: 'Tutting & Gleiten', steps: [
     { beats: 4, f: (b, g) => { const i = Math.floor(2 * g) % 4; const P = [LR(arm(0, -1.55, 0, -1.55), arm(-1.55, 0, -1.55)), LR(arm(-1.55, 0, -1.55), arm(0, -1.55, 0, -1.55)), both(arm(0, -1.55, 0, 1.55)), both(arm(-1.55, 0.4, -1.55, 0.6))]; return { pose: P[i], ry: [0.3, -0.3, 0, 0][i] }; } },
     { beats: 4, f: (b, g) => { const s = Math.floor(2 * g) % 2; return { pose: both(arm(-0.3, -0.7, -0.6)), dx: 0.7 * Math.sin((Math.PI * b) / 2), ry: -0.7 * Math.cos((Math.PI * b) / 2), legL: s ? 0.5 : 0, legR: s ? 0 : 0.5 }; } },
-    { beats: 3, f: b => ({ pose: both(arm(0, -1.55, 0, -1.55)), spin: groundSpin(b, 2.5, 3), y: 0.05 }) },
+    { beats: 3, f: b => ({ pose: both(arm(0, -1.55, 0, -1.55)), spin: groundSpin(b, 2.5, 3), squash: 1.05 }) },
     { beats: 2, f: () => ({ pose: LR(arm(-1.55, 0, -1.55), arm(0, -2.6)), rz: 0.15 }) },
   ] },
   { name: 'Disco-Spagat', steps: [
     { beats: 4, f: (b, g) => { const s = Math.floor(g / 2) % 2; return { pose: s ? LR(arm(-0.4, -2.6), HIP) : LR(HIP, arm(-0.4, -2.6)), rz: s ? -0.2 : 0.2, dx: s ? 0.25 : -0.25, legL: s ? 0.4 : 0, legR: s ? 0 : 0.4 }; } },
-    { beats: 3, f: b => ({ pose: LR(arm(-0.4, -2.6), arm(0, -0.8)), spin: groundSpin(b, 2.6, 3), y: 0.06 }) },
-    { beats: 3, f: b => ({ pose: both(arm(0, -2.4)), y: -0.4 * outCubic(b / 0.35), squash: L(1, 0.75, outCubic(b / 0.35)), spread: 1 }) },
+    { beats: 3, f: b => ({ pose: LR(arm(-0.4, -2.6), arm(0, -0.8)), spin: groundSpin(b, 2.6, 3), squash: 1.05 }) },
+    { beats: 3, f: b => ({ pose: both(arm(0, -2.4)), y: -0.16 * outCubic(b / 0.35), squash: L(1, 0.85, outCubic(b / 0.35)), spread: 1 }) },
     { beats: 2, f: b => { const a = air(b, 1.5, 0.5); return { pose: jumpArms(a, LR(arm(-0.4, -2.7), HIP)), y: a.y, squash: a.squash, rz: 0.25 }; } },
   ] },
   { name: 'Freeze-Serie', steps: [
@@ -222,7 +230,7 @@ export const ROUTINES: Routine[] = [
   { name: 'Knieslide', steps: [
     { beats: 4, f: (b, g) => ({ pose: LR(arm(-0.9, -0.9, -0.3), arm(-0.6, 0.55, -1.3, 0.5 * Math.sin(4 * Math.PI * g))), rx: 0.12 * hitEnv(g), ry: -0.3, legL: 0.3 * hitEnv(g) }) },
     { beats: 2, f: b => spinJump(b, 1, 2, 0.8, LR(arm(-0.9, -0.9, -0.3), arm(0, -2.6))) },
-    { beats: 3, f: b => { const s = outCubic(b / 0.3); const slide = 1 - Math.exp(-b * SPB * 2.5); return { pose: LR(arm(-1.2, -1.2, -0.3), arm(-0.5, 0.5, -1.3, 0.4 * Math.sin(8 * b))), rx: -0.5 * s, y: -0.3 * s, dz: 1.2 * slide - 0.4, squash: 0.85 }; } },
+    { beats: 3, f: b => { const s = outCubic(b / 0.3); const slide = 1 - Math.exp(-b * SPB * 2.5); return { pose: LR(arm(-1.2, -1.2, -0.3), arm(-0.5, 0.5, -1.3, 0.4 * Math.sin(8 * b))), rx: -0.5 * s, y: -0.14 * s, dz: 1.2 * slide - 0.4, squash: 0.85 }; } },
     { beats: 2, f: b => ({ ...spinJump(b, 0, 1.6, 0.5, both(V)), dz: 0.75 }) },
   ] },
   { name: 'Ninja', steps: [
@@ -232,17 +240,17 @@ export const ROUTINES: Routine[] = [
     { beats: 2, f: b => ({ pose: both(arm(-1.3, 0.35, -1.6, 0.3)), rx: 0.5 * Math.sin(Math.PI * cl(b / 1.5)) }) },
   ] },
   { name: 'Pirouetten & Sprung', steps: [
-    { beats: 3, f: b => ({ pose: both(arm(0, -2.6, 0, -0.7)), spin: groundSpin(b, 2.6, 3), y: 0.12, legL: 0.6 }) },
+    { beats: 3, f: b => ({ pose: both(arm(0, -2.6, 0, -0.7)), spin: groundSpin(b, 2.6, 3), squash: 1.06, legL: 0.6 }) },
     { beats: 2.5, f: b => { const a = air(b, 2.5, 0.8); return { pose: jumpArms(a, LR(arm(-1.6, -0.3), arm(1.0, -0.8))), dx: -1 + 2 * (a.phase === 0 ? 0 : a.k), y: a.y, squash: a.squash, rx: 0.3 * (a.phase === 1 ? 1 : 0), spread: a.phase === 1 ? Math.sin(Math.PI * a.k) : 0 }; } },
-    { beats: 3, f: b => ({ pose: both(arm(0, -2.6, 0, -0.7)), spin: -groundSpin(b, 2.4, 2), y: 0.12, dx: 1, legR: 0.6 }) },
+    { beats: 3, f: b => ({ pose: both(arm(0, -2.6, 0, -0.7)), spin: -groundSpin(b, 2.4, 2), squash: 1.06, dx: 1, legR: 0.6 }) },
     { beats: 2, f: b => ({ pose: both(arm(0.2, -0.9, -0.5)), rx: 0.5 * Math.sin(Math.PI * cl(b / 1.5)), dx: 1 }) },
   ] },
   { name: 'Siegerfeier', steps: [
-    { beats: 2, f: (b, g) => { const s = Math.floor(g) % 2; const up = arm(0, -2.7 + 0.5 * (1 - hitEnv(g)), -0.3); return { pose: s ? LR(up, arm(-0.5, -0.3, -1.2)) : LR(arm(-0.5, -0.3, -1.2), up), y: 0.05 * hitEnv(g) }; } },
+    { beats: 2, f: (b, g) => { const s = Math.floor(g) % 2; const up = arm(0, -2.7 + 0.5 * (1 - hitEnv(g)), -0.3); return { pose: s ? LR(up, arm(-0.5, -0.3, -1.2)) : LR(arm(-0.5, -0.3, -1.2), up), squash: 1 - 0.06 * hitEnv(g) }; } },
     { beats: 1.5, f: b => cartwheel(b, 1, 1.5) },
     { beats: 2, f: b => ({ ...backflip(b, 2), dx: 0.55 }) },
     { beats: 2, f: b => ({ ...spinJump(b, 1, 2, 0.75, both(arm(0, -2.8))), dx: 0.55 }) },
-    { beats: 2, f: b => ({ pose: both(arm(0, -2.4, 0, 0.3 * Math.sin(12 * b))), dx: 0.55, y: 0.05, rz: 0.06 * Math.sin(12 * b) }) },
+    { beats: 2, f: b => ({ pose: both(arm(0, -2.4, 0, 0.3 * Math.sin(12 * b))), dx: 0.55, squash: 1.04, rz: 0.06 * Math.sin(12 * b) }) },
   ] },
   { name: 'Lässige Rolle', steps: [
     { beats: 4, f: (b, g) => ({ pose: both(CROSS), rx: -0.28 + 0.06 * hitEnv(g), ry: 0.25 * Math.sin((Math.PI * b) / 2) }) },

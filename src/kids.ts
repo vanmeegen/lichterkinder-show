@@ -1,6 +1,6 @@
 // Die Lichterkinder: eigene, knuffige Bohnen-Figuren mit Mütze, Schal, Laterne – und Armen mit Ellbogen.
 import * as THREE from 'three';
-import { ROUTINES, evalRoutine, soloPlan, setBeatLength } from './rapmoves';
+import { ROUTINES, evalRoutine, soloPlan, setBeatLength, hopY } from './rapmoves';
 
 export interface Mood {
   t: number;            // Liedzeit (s)
@@ -347,10 +347,14 @@ export class Kids {
       const ph = k.phase;
       // ---------- Grundbewegung ----------
       const b = Math.abs(Math.sin(Math.PI * (beat + ph * 0.25)));
-      let y = (0.03 + 0.06 * energy) * b + (energy > 0.8 ? 0.18 * Math.pow(b, 3) : 0);
+      // Hüpfen im Takt: Bodenkontakt, dann Wurfparabel, Landung auf dem Schlag (keine Sinus-„Aufzug“-Bewegung)
+      const hopH = 0.015 + 0.035 * energy + (energy > 0.8 ? 0.13 : 0);
+      const gb = beat + ph * 0.08;
+      let y = hopY(gb, hopH, 1);
+      const sinceLand = (((gb % 1) + 1) % 1);
       let x = k.baseX, zPos = k.baseZ, rotY = k.baseRotY, spin = 0;
       let bodyRz = Math.sin(Math.PI * 0.5 * (beat + ph)) * (0.05 + 0.08 * energy), bodyRx = 0;
-      let squash = 1 + 0.07 * (b - 0.5) * (0.5 + energy);
+      let squash = 1 - (0.03 + 0.5 * hopH) * Math.exp(-sinceLand * 7);
 
       // Arme normal: links locker/winkend, rechts Laterne vor sich
       let pose: Pose = {
@@ -363,7 +367,12 @@ export class Kids {
       let armsUp = 0;
       if (lk < 7) {
         const w = Math.max(0, Math.sin(Math.PI * cl((lk - (k.idx / n) * 0.9) / 0.9)));
-        y += 0.7 * w; armsUp = Math.min(1, lk / 0.4) * (lk < 6 ? 1 : 6.6 - lk);
+        // La-Ola: jedes Kind springt mit Ausholen und Wurfparabel (0,7 hoch)
+        const a = lk - (k.idx / n) * 0.9, T = Math.sqrt((8 * 0.7) / 13), tt = a - 0.15;
+        if (a > 0 && tt < 0) squash *= 1 - 0.2 * Math.sin(Math.PI * (a / 0.15));
+        if (tt > 0 && tt < T) y += 6.5 * T * tt - 6.5 * tt * tt;
+        if (tt >= T && tt < T + 0.4) squash *= 1 - 0.2 * Math.exp(-(tt - T) * 9);
+        void w; armsUp = Math.min(1, lk / 0.4) * (lk < 6 ? 1 : 6.6 - lk);
         spin = ss((lk - 1.2 - k.idx * 0.08) / 0.8) * Math.PI * 2;
       }
       if (licht < 4) { const f = Math.min(1, licht / 0.3) * Math.min(1, (4 - licht) / 0.5); pose.R = mixArm(pose.R, mirror(arm(-2.9, 0, 0, 0)), f); }
@@ -400,7 +409,7 @@ export class Kids {
           const r = evalRoutine(ROUTINES[so.routine], so.u, beat), w = so.p * rp;
           // nach vorn auf die Bühne laufen (mit kleinen Hüpfern), dort tanzen, danach zurück
           x = lerp(x, so.sx + (r.dx ?? 0), w); zPos = lerp(zPos, so.sz + (r.dz ?? 0), w);
-          y = lerp(y, r.y ?? 0, w) + 0.14 * Math.abs(Math.sin(Math.PI * beat * 2)) * so.walk;
+          y = lerp(y, r.y ?? 0, w) + hopY(beat, 0.07, 0.5) * so.walk;
           pose = mixPose(pose, r.pose, w);
           bodyRx = lerp(bodyRx, r.rx ?? 0, w); bodyRz = lerp(bodyRz, r.rz ?? 0, w);
           rotY = lerp(rotY, r.ry ?? 0, w); squash = lerp(squash, r.squash ?? 1, w);
