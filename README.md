@@ -69,6 +69,14 @@ veröffentlicht – z. B. `preview/rap-solos` → https://vanmeegen.github.io/li
 - Musikdatei und Ablauf werden im Browser gemeinsam mit der Hauptversion gespeichert.
 - Übernahme in `main` später: Branch mergen und den Revert-Commit auf `main` vorher zurücknehmen (`git revert <revert-commit>`).
 
+## Bewegungsdaten der Rap-Soli
+
+Die Solo-Tänze im Rap-Teil (Breakdance, Saltos, Rad, Moonwalk, Kosakentanz u. a.) sind echte Bewegungsaufnahmen aus der
+**CMU Graphics Lab Motion Capture Database** – *The data used in this project was obtained from mocap.cs.cmu.edu.
+The database was created with funding from NSF EIA-0196217.* (BVH-Fassung von B. Hahne, cgspeed.com).
+Sie wurden auf die Bohnen-Figuren übertragen (Hüftbahn, Oberkörper, Arme mit Ellbogen, Beine); Sprünge laufen in Echtzeit
+mit der echten Schwerkraft der Aufnahme. Daten: `public/mocap.json`.
+
 ## Entwicklung
 
 ```bash

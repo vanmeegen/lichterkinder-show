@@ -1,6 +1,7 @@
 // Die Lichterkinder: eigene, knuffige Bohnen-Figuren mit Mütze, Schal, Laterne – und Armen mit Ellbogen.
 import * as THREE from 'three';
 import { ROUTINES, evalRoutine, soloPlan, setBeatLength, hopY } from './rapmoves';
+import { MocapFrame, newFrame, mocapReady, mocapCount, mocapSample, mocapCut } from './mocap';
 
 export interface Mood {
   t: number;            // Liedzeit (s)
@@ -49,6 +50,7 @@ function jelly(mat: THREE.Material, jig: { value: THREE.Vector3 }, centerY: numb
   mat.customProgramCacheKey = () => 'jelly' + centerY + sigma + inv.z;
 }
 
+const _up = new THREE.Vector3(), _DOWN = new THREE.Vector3(0, -1, 0), _qa = new THREE.Quaternion(), _qb = new THREE.Quaternion(), _qi = new THREE.Quaternion(), _vd = new THREE.Vector3();
 const cl = (x: number, a = 0, b = 1) => Math.min(b, Math.max(a, x));
 const ss = (x: number) => { x = cl(x); return x * x * (3 - 2 * x); };
 const lerp = (a: number, b: number, k: number) => a + (b - a) * k;
@@ -63,6 +65,7 @@ const mixPose = (a: Pose, b: Pose, k: number): Pose => ({ L: mixArm(a.L, b.L, k)
 const mirror = (a: Arm): Arm => ({ sx: a.sx, sz: -a.sz, ex: a.ex, ez: -a.ez });
 
 interface Kid {
+  mf: MocapFrame; mw: number; msq: number; // Motion-Capture-Solo: aktueller Frame, Gewicht, Hocke
   jig: { value: THREE.Vector3 }; tipPivot: THREE.Group; bommelPivot: THREE.Group;
   phys: { j: number[]; jv: number[]; h: number[]; hv: number[]; p: THREE.Vector3; v: THREE.Vector3; pt: THREE.Vector3; vt: THREE.Vector3; init: boolean };
   root: THREE.Group; spinner: THREE.Group; body: THREE.Group;
@@ -301,7 +304,8 @@ export class Kids {
     this.group.add(root);
     return { root, spinner, body, shL, elL, shR, elR, eyes, pupils, lanternGroup, tip: stickTip, hang, lanternMat, lanternBase, phase: (i * 0.37) % 1, idx: i,
       mouth, legL, legR, baseX: x, baseZ: z, baseRotY, shades, bodyMat, rapMouth, spr: new Float32Array(10), vel: new Float32Array(10), jig, tipPivot, bommelPivot,
-      phys: { j: [0, 0, 0], jv: [0, 0, 0], h: [0, 0, 0], hv: [0, 0, 0], p: new THREE.Vector3(), v: new THREE.Vector3(), pt: new THREE.Vector3(), vt: new THREE.Vector3(), init: false } };
+      phys: { j: [0, 0, 0], jv: [0, 0, 0], h: [0, 0, 0], hv: [0, 0, 0], p: new THREE.Vector3(), v: new THREE.Vector3(), pt: new THREE.Vector3(), vt: new THREE.Vector3(), init: false },
+      mf: newFrame(), mw: 0, msq: 1 };
   }
 
   /** Hip-Hop-Choreografie: alle 2 Takte ein neuer Move, weich überblendet. */
@@ -383,6 +387,31 @@ export class Kids {
     k.bommelPivot.rotation.set(0, 0, c(P.h[2] - P.h[0], 0.9) * 0.8 + breeze * 1.5);
   }
 
+  /** Mocap-Haltung auf Oberkörper, Arme (Ober-/Unterarm) und Beine übertragen – mit Gewicht w eingeblendet. */
+  private applyMocap(k: Kid) {
+    const F = k.mf, w = k.mw;
+    k.spinner.quaternion.slerp(F.q, w);
+    const arm = (sh: THREE.Group, el: THREE.Group, a: THREE.Vector3, f: THREE.Vector3) => {
+      _qa.setFromUnitVectors(_DOWN, a);                               // Oberarm zeigt in Richtung a (Körpersystem)
+      sh.quaternion.slerp(_qa, w);
+      _vd.copy(f).applyQuaternion(_qi.copy(sh.quaternion).invert());  // Unterarm relativ zum Oberarm
+      _qb.setFromUnitVectors(_DOWN, _vd.normalize());
+      el.quaternion.slerp(_qb, w);
+    };
+    // Körper-X zeigt zur linken Körperseite = rechts im Bild (+x) -> rechter Rig-Arm bekommt den linken Mocap-Arm
+    arm(k.shR, k.elR, F.aL, F.fL);
+    arm(k.shL, k.elL, F.aR, F.fR);
+    const leg = (m: THREE.Mesh, side: number, dir: THREE.Vector3) => {
+      _qa.setFromUnitVectors(_DOWN, dir);
+      m.quaternion.slerp(_qa, w);
+      // Drehpunkt oben am Bein (Hüfte), nicht in der Beinmitte
+      _vd.set(0, -0.16, 0).applyQuaternion(m.quaternion);
+      m.position.lerp(_up.set(side * 0.18 + _vd.x, 0.36 + _vd.y, _vd.z), w);
+    };
+    leg(k.legR, 1, F.lL);
+    leg(k.legL, -1, F.lR);
+  }
+
   update(m: Mood) {
     // Zeitschritt; bei Sprüngen in der Zeitleiste (Vorspulen) Federn sofort zurücksetzen
     const now = performance.now();
@@ -398,7 +427,7 @@ export class Kids {
     const n = this.kids.length;
     // Solisten im Rap: pro Solo kommt ein anderes Kind nach vorn und tanzt eine komplette Choreografie;
     // im letzten Rap-Teil drei Kinder nebeneinander mit drei verschiedenen Choreografien.
-    const solos = new Map<number, { routine: number; p: number; u: number; walk: number; sx: number; sz: number; spot: number }>();
+    const solos = new Map<number, { routine: number; p: number; u: number; walk: number; sx: number; sz: number; spot: number; tDance: number; avail: number }>();
     if (m.rap > 0 && m.rapT >= 0 && m.rapBeats > 6) {
       const nSlots = Math.max(1, Math.round(m.rapBeats / 16));
       const slotBeats = m.rapBeats / nSlots;
@@ -409,7 +438,9 @@ export class Kids {
       const u = (fb - WALK) / Math.max(1, slotBeats - 2 * WALK);
       const walk = fb < WALK ? 1 - fb / WALK : fb > slotBeats - WALK ? (fb - (slotBeats - WALK)) / WALK : 0;
       const stage = count === 1 ? [[0, 7.6]] : [[-3.0, 7.2], [0, 7.6], [3.0, 7.2]];
-      soloPlan(m.rapNo, slot, count, n).forEach((pl, j) => solos.set(pl.kid, { routine: pl.routine, p, u, walk, sx: stage[j][0], sz: stage[j][1], spot: j }));
+      const spb = m.rapBeat > 0 ? m.rapT / m.rapBeat : 0.75;
+      const tDance = (fb - WALK) * spb, avail = (slotBeats - 2 * WALK) * spb; // echte Sekunden – Mocap läuft in Echtzeit (echte Schwerkraft)
+      soloPlan(m.rapNo, slot, count, n).forEach((pl, j) => solos.set(pl.kid, { routine: pl.routine, p, u, walk, sx: stage[j][0], sz: stage[j][1], spot: j, tDance, avail }));
     }
     for (const sp of this.spots) { sp.disc.visible = sp.beam.visible = false; }
     for (const k of this.kids) {
@@ -474,7 +505,33 @@ export class Kids {
         pose = mixPose(pose, this.rapPose(m.rapBeat, k.idx), rp);
 
         const so = solos.get(k.idx);
-        if (so && so.p > 0) {
+        k.mw = 0;
+        if (so && so.p > 0 && mocapReady()) {
+          // ---- echte Bewegungsaufnahme ----
+          const w = so.p * rp, idx = so.routine % mocapCount();
+          const tt = Math.max(0, Math.min(so.tDance, mocapCut(idx, so.avail)));
+          const F = mocapSample(idx, tt, k.mf);
+          const HIP = 0.836;                                   // Höhe der Körpermitte über dem Boden (Welt)
+          const upY = _up.set(0, 1, 0).applyQuaternion(F.q).y;
+          const upright = ss((upY - 0.5) / 0.35);
+          // aufrecht: Hocke = Stauchung (Füße bleiben am Boden); Sprünge heben ab; liegend/kopfüber: Körpermitte sinkt
+          let ym = (1 - upright) * (F.h.y - 1) * HIP + upright * Math.max(0, F.h.y - 1) * HIP;
+          const sq = upright * Math.min(1, Math.max(0.62, F.h.y)) + (1 - upright);
+          // nicht in den Boden: tiefster Punkt des gedrehten Körpers ≥ 0
+          const center = ym + HIP * sq;
+          const low = center - HIP * sq * Math.max(0, upY) - 1.1 * Math.max(0, -upY) - 0.39 * Math.sqrt(Math.max(0, 1 - upY * upY));
+          if (low < 0) ym -= low;
+          x = lerp(x, so.sx + F.h.x * HIP, w); zPos = lerp(zPos, so.sz + F.h.z * HIP, w);
+          y = lerp(y, ym, w) + hopY(beat, 0.07, 0.5) * so.walk;
+          bodyRx = lerp(bodyRx, 0, w); bodyRz = lerp(bodyRz, 0, w); rotY = lerp(rotY, 0, w); spin *= 1 - w;
+          squash = lerp(squash, sq, w); extraSpin = 0;
+          k.mw = w;
+          const sp = this.spots[so.spot];
+          sp.disc.visible = sp.beam.visible = true;
+          sp.disc.position.set(x, 0.02, zPos); sp.beam.position.set(x, 0, zPos);
+          (sp.disc.material as THREE.MeshBasicMaterial).opacity = 0.45 * w;
+          (sp.beam.material as THREE.MeshBasicMaterial).opacity = 0.035 * w;
+        } else if (so && so.p > 0) {
           const r = evalRoutine(ROUTINES[so.routine], so.u, beat), w = so.p * rp;
           // nach vorn auf die Bühne laufen (mit kleinen Hüpfern), dort tanzen, danach zurück
           x = lerp(x, so.sx + (r.dx ?? 0), w); zPos = lerp(zPos, so.sz + (r.dz ?? 0), w);
@@ -508,6 +565,7 @@ export class Kids {
       k.legL.rotation.set(-0.9 * liftL, 0, -0.6 * spread); k.legR.rotation.set(-0.9 * liftR, 0, 0.6 * spread);
       k.shL.rotation.set(pose.L.sx, 0, pose.L.sz); k.elL.rotation.set(pose.L.ex, 0, pose.L.ez);
       k.shR.rotation.set(pose.R.sx, 0, pose.R.sz); k.elR.rotation.set(pose.R.ex, 0, pose.R.ez);
+      if (k.mw > 0) this.applyMocap(k);
 
       const blink = ((t + ph * 7.3) % 4.1) < 0.12 ? 0.12 : 1;
       const surprise = Math.exp(-(stern < 99 ? stern : 99) * 1.2) * 0.25;

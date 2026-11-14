@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { Stage } from './scene';
+import { loadMocap } from './mocap';
 import { Lyrics } from './lyrics';
 import { Editor } from './editor';
 import { Clock, CountdownClock, SpotifyClock, FileClock, storeAudio, loadAudio } from './clock';
@@ -280,6 +281,7 @@ function frame() {
 
 // ---------- Start ----------
 (async () => {
+  loadMocap(); // echte Tanz-Aufnahmen für die Rap-Soli (lädt im Hintergrund)
   try { const msg = await handleRedirect(); if (msg) toast(msg, 3000); } catch (e: any) { toast(e.message, 4000); }
   const saved = await loadAudio();
   if (saved) fileClock.setFile(saved.blob, saved.name);
