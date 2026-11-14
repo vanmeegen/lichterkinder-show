@@ -16,6 +16,7 @@ export type Shape = 'sphere' | 'ring' | 'star' | 'heart' | 'tree' | 'flake' | 'b
 export interface Burst {
   t: number; x: number; y: number; z: number; R: number; shape: Shape;
   c1: Col; c2: Col; life: number; grav: number; text?: string; launch: number; crackle: boolean; big?: boolean;
+  hold?: boolean; // Schriftzug bleibt als Standbild stehen (kein Absinken, Ausblenden erst ganz am Ende)
 }
 
 const TRAIL = [0, 0.035, 0.07, 0.11];
@@ -96,7 +97,8 @@ export function buildSchedule(sheet: Sheet): Burst[] {
   // ---------- Finale ----------
   const fin = END - 9;
   for (let k = 0; k < 26; k++) add(fin + k * 0.22, pick(['sphere', 'ring', 'palm', 'willow', 'star'] as Shape[]), { R: r(13, 18) });
-  add(END - 5.6, 'text', { text: 'Frohe Weihnachten', x: 0, y: 25, z: BACK_Z + 4, R: 34, c1: C.gold, c2: C.white, crackle: true, big: true });
+  // Schlussgruß: formt sich und bleibt als Standbild bis zum Ende des Liedes stehen
+  add(END - 6.5, 'text', { text: 'Frohe Weihnachten', x: 0, y: 25, z: BACK_Z + 4, R: 34, c1: C.gold, c2: C.white, crackle: false, big: true, hold: true, grav: 0, life: SONG_DURATION - (END - 6.5) + 0.3 });
   for (let i = 0; i < 5; i++) add(END - 5.6 + 0.4, 'willow', { x: -40 + i * 20, y: 38, R: 15 });
 
   out.sort((a, b) => a.t - b.t);
@@ -160,7 +162,7 @@ varying vec3 vColor;
 void main(){
   float t = uTime - aT.z;
   vec3 pos = vec3(0.); float alpha = 0.; vec3 col = aColor; float size = aP.y;
-  if (aT.w < 0.5) {
+  if (aT.w < 0.5 || aT.w > 1.5) {
     float a = t - aT.x;
     if (a > 0. && a < aT.y) {
       float d = (1. - exp(-${DRAG.toFixed(2)} * a)) / ${DRAG.toFixed(2)};
@@ -171,6 +173,10 @@ void main(){
       float fl = sin(a * 47. + aP.z * 6.2831);
       alpha *= mix(1., step(0.15, fl) * 1.6, aP.w * smoothstep(.45, .7, u));
       size *= 1. + 0.3 * exp(-a * 5.);
+      if (aT.w > 1.5) { // Standbild: bleibt hell stehen, funkelt leicht, blendet erst ganz am Ende aus
+        alpha = smoothstep(0., 0.12, a) * (1. - smoothstep(aT.y - 1.5, aT.y, a)) * (0.8 + 0.2 * sin(a * 5. + aP.z * 6.2831));
+        col = mix(aColor, aColor2, 0.3 + 0.2 * sin(a * 2. + aP.z * 6.2831));
+      }
     }
   } else {
     float L = aP.x; float a = t - (aT.x - L);
@@ -243,14 +249,14 @@ export class Fireworks {
     for (const b of this.bursts) {
       const unit = this.shapeOf(b, rng);
       const planar = !['sphere', 'willow', 'palm', 'ring'].includes(b.shape);
-      const yaw = planar ? (rng() - 0.5) * 0.5 : 0, cy = Math.cos(yaw), sy = Math.sin(yaw);
+      const yaw = planar && !b.hold ? (rng() - 0.5) * 0.5 : 0, cy = Math.cos(yaw), sy = Math.sin(yaw);
       const isComet = b.shape === 'comet';
-      const lags = isComet ? Array.from({ length: 26 }, (_, i) => i * 0.03) : b.shape === 'text' ? [0, 0.05] : TRAIL;
-      const bright = b.shape === 'text' ? 1.9 : 1.7;
+      const lags = isComet ? Array.from({ length: 26 }, (_, i) => i * 0.03) : b.hold ? [0] : b.shape === 'text' ? [0, 0.05] : TRAIL;
+      const bright = b.hold ? 1.35 : b.shape === 'text' ? 1.9 : 1.7;
       for (const u of unit) {
         let [x, y, z] = u;
         if (planar) { const x2 = x * cy - z * sy, z2 = x * sy + z * cy; x = x2; z = z2; }
-        const jitter = planar ? 1 + (rng() - 0.5) * 0.06 : 1;
+        const jitter = planar && b.shape !== 'text' ? 1 + (rng() - 0.5) * 0.06 : 1; // Schrift ohne Streuung, sonst verschwimmen die äußeren Buchstaben
         let k = DRAG * b.R * jitter;
         if (b.shape === 'willow') k *= 0.85;
         const vel: S.V3 = [x * k, y * k, z * k];
@@ -259,9 +265,9 @@ export class Fireworks {
         const ph = rng();
         lags.forEach((lag, li) => {
           const f = bright * Math.pow(1 - li / (lags.length + 0.5), 1.6);
-          const size = (b.shape === 'text' ? 0.42 : isComet ? 0.9 - li * 0.025 : 0.62) * (1 - li * 0.13);
+          const size = (b.hold ? 0.27 : b.shape === 'text' ? 0.42 : isComet ? 0.9 - li * 0.025 : 0.62) * (1 - li * 0.13);
           push([b.x, b.y, b.z], vel, [c1[0] * f, c1[1] * f, c1[2] * f], [c2[0] * f, c2[1] * f, c2[2] * f],
-            [b.t, isComet ? 3.0 : b.life, lag, 0], [isComet ? 0.3 : b.grav, size, ph, b.crackle && li === 0 ? 1 : 0]);
+            [b.t, isComet ? 3.0 : b.life, lag, b.hold ? 2 : 0], [isComet ? 0.3 : b.grav, size, ph, b.crackle && li === 0 ? 1 : 0]);
         });
       }
       // Rakete
