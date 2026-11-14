@@ -1,6 +1,6 @@
 // Die Lichterkinder: eigene, knuffige Bohnen-Figuren mit Mütze, Schal, Laterne – und Armen mit Ellbogen.
 import * as THREE from 'three';
-import { ROUTINES, evalRoutine, soloPlan } from './rapmoves';
+import { ROUTINES, evalRoutine, soloPlan, setBeatLength } from './rapmoves';
 
 export interface Mood {
   t: number;            // Liedzeit (s)
@@ -53,6 +53,7 @@ interface Kid {
   eyes: THREE.Mesh[]; pupils: THREE.Mesh[]; lanternGroup: THREE.Group; tip: THREE.Group; hang: THREE.Group; lanternMat: THREE.MeshBasicMaterial;
   lanternBase: THREE.Color; phase: number; idx: number; mouth: THREE.Mesh; legL: THREE.Mesh; legR: THREE.Mesh;
   baseX: number; baseZ: number; baseRotY: number; shades: THREE.Group; bodyMat: THREE.MeshToonMaterial; rapMouth: THREE.Group;
+  spr: Float32Array; vel: Float32Array; // Federn für Arme und Oberkörper (Nachschwingen)
 }
 
 const heartShape = (() => {
@@ -275,7 +276,7 @@ export class Kids {
 
     this.group.add(root);
     return { root, spinner, body, shL, elL, shR, elR, eyes, pupils, lanternGroup, tip: stickTip, hang, lanternMat, lanternBase, phase: (i * 0.37) % 1, idx: i,
-      mouth, legL, legR, baseX: x, baseZ: z, baseRotY, shades, bodyMat, rapMouth };
+      mouth, legL, legR, baseX: x, baseZ: z, baseRotY, shades, bodyMat, rapMouth, spr: new Float32Array(10), vel: new Float32Array(10) };
   }
 
   /** Hip-Hop-Choreografie: alle 2 Takte ein neuer Move, weich überblendet. */
@@ -300,7 +301,28 @@ export class Kids {
     return f < 0.06 ? mixPose(prev, cur, ss(f / 0.06)) : cur;
   }
 
+  private lastT = -1; private lastNow = 0; private snapSprings = true;
+
+  /** Gedämpfte Feder: Arme und Oberkörper folgen der Zielhaltung mit leichtem Nachschwingen. */
+  private spring(k: Kid, target: number[], dt: number) {
+    const w = 2 * Math.PI * 4.2, z = 0.5, h = 1 / 240;
+    if (this.snapSprings) { target.forEach((v, i) => { k.spr[i] = v; k.vel[i] = 0; }); return; }
+    for (let t = 0; t < dt; t += h) {
+      const st = Math.min(h, dt - t);
+      for (let i = 0; i < target.length; i++) {
+        const a = w * w * (target[i] - k.spr[i]) - 2 * z * w * k.vel[i];
+        k.vel[i] += a * st; k.spr[i] += k.vel[i] * st;
+      }
+    }
+  }
+
   update(m: Mood) {
+    // Zeitschritt; bei Sprüngen in der Zeitleiste (Vorspulen) Federn sofort auf die Zielhaltung setzen
+    const now = performance.now();
+    const dt = Math.min(0.05, Math.max(0, (now - this.lastNow) / 1000));
+    this.snapSprings = this.lastT < 0 || Math.abs(m.t - this.lastT - dt) > 0.25;
+    this.lastT = m.t; this.lastNow = now;
+    if (m.rapT > 0 && m.rapBeat > 0) setBeatLength(m.rapT / m.rapBeat);
     const { t, beat, energy } = m;
     const herz = m.since.herz ?? 99, licht = m.since.lichter ?? 99, lk = m.since.lichterkinder ?? 99, stern = m.since.stern ?? 99;
     const fr = m.since.frieren ?? 99;
@@ -312,12 +334,12 @@ export class Kids {
       const nSlots = Math.max(1, Math.round(m.rapBeats / 16));
       const slotBeats = m.rapBeats / nSlots;
       const slot = Math.min(nSlots - 1, Math.floor(m.rapBeat / slotBeats)), fb = m.rapBeat - slot * slotBeats;
-      const count = m.rapNo === m.rapCount - 1 ? 3 : 2;
+      const count = m.rapNo === m.rapCount - 1 ? 3 : 1;
       const WALK = 1.5;
       const p = ss(fb / WALK) * (1 - ss((fb - (slotBeats - WALK)) / WALK));
       const u = (fb - WALK) / Math.max(1, slotBeats - 2 * WALK);
       const walk = fb < WALK ? 1 - fb / WALK : fb > slotBeats - WALK ? (fb - (slotBeats - WALK)) / WALK : 0;
-      const stage = count === 2 ? [[-2.0, 7.4], [2.0, 7.4]] : [[-3.0, 7.2], [0, 7.6], [3.0, 7.2]];
+      const stage = count === 1 ? [[0, 7.6]] : [[-3.0, 7.2], [0, 7.6], [3.0, 7.2]];
       soloPlan(m.rapNo, slot, count, n).forEach((pl, j) => solos.set(pl.kid, { routine: pl.routine, p, u, walk, sx: stage[j][0], sz: stage[j][1], spot: j }));
     }
     for (const sp of this.spots) { sp.disc.visible = sp.beam.visible = false; }
@@ -397,6 +419,10 @@ export class Kids {
       k.root.position.set(x, y, zPos);
       k.root.rotation.y = rotY + extraSpin;
       k.spinner.rotation.set(spinnerRx, 0, spinnerRz);
+      this.spring(k, [pose.L.sx, pose.L.sz, pose.L.ex, pose.L.ez, pose.R.sx, pose.R.sz, pose.R.ex, pose.R.ez, bodyRx, bodyRz], dt);
+      const sp = k.spr;
+      pose = { L: { sx: sp[0], sz: sp[1], ex: sp[2], ez: sp[3] }, R: { sx: sp[4], sz: sp[5], ex: sp[6], ez: sp[7] } };
+      bodyRx = sp[8]; bodyRz = sp[9];
       k.body.rotation.set(bodyRx, spin, bodyRz);
       k.body.scale.set(1 / Math.sqrt(squash), squash, 1 / Math.sqrt(squash));
       k.legL.position.set(-0.18 - 0.22 * spread, 0.2 + 0.05 * Math.max(0, Math.sin(Math.PI * beat)) * (1 - rp) + 0.2 * liftL, 0.14 * liftL);
