@@ -1,11 +1,11 @@
 name: Deploy to GitHub Pages
 # main → https://vanmeegen.github.io/lichterkinder-show/
 # Branches preview/<name> → https://vanmeegen.github.io/lichterkinder-show/preview/<name>/
-# Läuft automatisch bei jedem Push auf main. Previews nach Änderungen manuell aktualisieren:
-# Actions → „Deploy to GitHub Pages“ → „Run workflow“ (Branch: main).
+# Läuft automatisch bei jedem Push auf main oder auf einen preview/*-Branch (baut immer main + alle Previews).
+# Manuell: Actions → „Deploy to GitHub Pages“ → „Run workflow“.
 on:
   push:
-    branches: [main]
+    branches: [main, 'preview/**']
   workflow_dispatch:
 permissions:
   contents: read
