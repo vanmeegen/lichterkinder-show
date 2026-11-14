@@ -34,6 +34,21 @@ function toon(color: number) {
 }
 
 const _q = new THREE.Quaternion(), _q2 = new THREE.Quaternion(), _swing = new THREE.Euler();
+// Wackelbauch: verformt nur die Bauchgegend (Kopf, Augen, Mütze bleiben ruhig). uJig = (seitlich, vor/zurück, Ausbeulen)
+const jellyTime = { value: 0 };
+function jelly(mat: THREE.Material, jig: { value: THREE.Vector3 }, centerY: number, sigma: number, inv: THREE.Vector3) {
+  mat.onBeforeCompile = sh => {
+    sh.uniforms.uJig = jig; sh.uniforms.uJT = jellyTime;
+    sh.vertexShader = sh.vertexShader
+      .replace('#include <common>', '#include <common>\nuniform vec3 uJig; uniform float uJT;')
+      .replace('#include <begin_vertex>', `#include <begin_vertex>
+        float jw = exp(-pow((position.y - (${centerY.toFixed(3)})) / ${sigma.toFixed(3)}, 2.0));
+        vec3 jd = vec3(uJig.x, 0.0, uJig.y) + normal * (uJig.z + 0.006 * sin(uJT * 6.0 + position.y * 9.0));
+        transformed += jd * jw * vec3(${inv.x.toFixed(3)}, ${inv.y.toFixed(3)}, ${inv.z.toFixed(3)});`);
+  };
+  mat.customProgramCacheKey = () => 'jelly' + centerY + sigma + inv.z;
+}
+
 const cl = (x: number, a = 0, b = 1) => Math.min(b, Math.max(a, x));
 const ss = (x: number) => { x = cl(x); return x * x * (3 - 2 * x); };
 const lerp = (a: number, b: number, k: number) => a + (b - a) * k;
@@ -48,6 +63,8 @@ const mixPose = (a: Pose, b: Pose, k: number): Pose => ({ L: mixArm(a.L, b.L, k)
 const mirror = (a: Arm): Arm => ({ sx: a.sx, sz: -a.sz, ex: a.ex, ez: -a.ez });
 
 interface Kid {
+  jig: { value: THREE.Vector3 }; tipPivot: THREE.Group; bommelPivot: THREE.Group;
+  phys: { j: number[]; jv: number[]; h: number[]; hv: number[]; p: THREE.Vector3; v: THREE.Vector3; pt: THREE.Vector3; vt: THREE.Vector3; init: boolean };
   root: THREE.Group; spinner: THREE.Group; body: THREE.Group;
   shL: THREE.Group; elL: THREE.Group; shR: THREE.Group; elR: THREE.Group;
   eyes: THREE.Mesh[]; pupils: THREE.Mesh[]; lanternGroup: THREE.Group; tip: THREE.Group; hang: THREE.Group; lanternMat: THREE.MeshBasicMaterial;
@@ -173,7 +190,11 @@ export class Kids {
 
     const torso = new THREE.Mesh(new THREE.CapsuleGeometry(0.44, 0.62, 8, 24), bodyMat);
     torso.position.y = 0.95; body.add(torso);
-    const belly = new THREE.Mesh(new THREE.SphereGeometry(0.32, 20, 16), toon(new THREE.Color(BODY[i]).lerp(new THREE.Color(0xffffff), 0.45).getHex()));
+    const jig = { value: new THREE.Vector3() };
+    jelly(bodyMat, jig, -0.2, 0.3, new THREE.Vector3(1, 1, 1));            // Rumpf (lokal: Mitte 0, Bauch bei -0,2)
+    const bellyMat = toon(new THREE.Color(BODY[i]).lerp(new THREE.Color(0xffffff), 0.45).getHex());
+    jelly(bellyMat, jig, 0.0, 0.3, new THREE.Vector3(1, 1 / 1.05, 1 / 0.45)); // Bauchfleck (skaliert) – bewegt sich mit
+    const belly = new THREE.Mesh(new THREE.SphereGeometry(0.32, 20, 16), bellyMat);
     belly.scale.set(1, 1.05, 0.45); belly.position.set(0, 0.72, 0.28); body.add(belly);
 
     const white = new THREE.MeshBasicMaterial({ color: 0xffffff });
@@ -201,12 +222,15 @@ export class Kids {
     const hatMat = toon(HAT[i]);
     const hat = new THREE.Mesh(new THREE.SphereGeometry(0.455, 24, 14, 0, Math.PI * 2, 0, Math.PI / 2), hatMat);
     hat.scale.set(1, 1.15, 1); hat.position.y = 1.45; body.add(hat);
+    // Spitze und Bommel hängen an Pendeln (Drehpunkt oben an der Mütze) und schwingen nach
+    const tipPivot = new THREE.Group(); tipPivot.position.set(0.0, 1.86, -0.02); body.add(tipPivot);
     const tip = new THREE.Mesh(new THREE.ConeGeometry(0.2, 0.42, 16), hatMat);
-    tip.position.set(0.12, 2.0, -0.02); tip.rotation.z = -0.5; body.add(tip);
+    tip.position.set(0.12, 0.14, 0); tip.rotation.z = -0.5; tipPivot.add(tip);
+    const bommelPivot = new THREE.Group(); bommelPivot.position.set(0.22, 0.24, 0); tipPivot.add(bommelPivot);
     const rim = new THREE.Mesh(new THREE.TorusGeometry(0.43, 0.085, 10, 28), toon(0xffffff));
     rim.rotation.x = Math.PI / 2; rim.position.y = 1.47; body.add(rim);
     const bommel = new THREE.Mesh(new THREE.IcosahedronGeometry(0.13, 2), toon(0xffffff));
-    bommel.position.set(0.28, 2.16, -0.02); body.add(bommel);
+    bommel.position.set(0.06, 0.06, 0); bommelPivot.add(bommel);
 
     const scarfMat = toon(SCARF[i]);
     const scarf = new THREE.Mesh(new THREE.TorusGeometry(0.4, 0.09, 10, 28), scarfMat);
@@ -276,7 +300,8 @@ export class Kids {
 
     this.group.add(root);
     return { root, spinner, body, shL, elL, shR, elR, eyes, pupils, lanternGroup, tip: stickTip, hang, lanternMat, lanternBase, phase: (i * 0.37) % 1, idx: i,
-      mouth, legL, legR, baseX: x, baseZ: z, baseRotY, shades, bodyMat, rapMouth, spr: new Float32Array(10), vel: new Float32Array(10) };
+      mouth, legL, legR, baseX: x, baseZ: z, baseRotY, shades, bodyMat, rapMouth, spr: new Float32Array(10), vel: new Float32Array(10), jig, tipPivot, bommelPivot,
+      phys: { j: [0, 0, 0], jv: [0, 0, 0], h: [0, 0, 0], hv: [0, 0, 0], p: new THREE.Vector3(), v: new THREE.Vector3(), pt: new THREE.Vector3(), vt: new THREE.Vector3(), init: false } };
   }
 
   /** Hip-Hop-Choreografie: alle 2 Takte ein neuer Move, weich überblendet. */
@@ -302,6 +327,7 @@ export class Kids {
   }
 
   private lastT = -1; private lastNow = 0; private snapSprings = true;
+  private _q = new THREE.Quaternion(); private _a = new THREE.Vector3(); private _p = new THREE.Vector3(); private _v = new THREE.Vector3();
 
   /** Gedämpfte Feder: Arme und Oberkörper folgen der Zielhaltung mit leichtem Nachschwingen. */
   private spring(k: Kid, target: number[], dt: number) {
@@ -316,12 +342,55 @@ export class Kids {
     }
   }
 
+  /** Weiche Nachbewegung: Bauch schwappt, Mützenspitze und Bommel pendeln – getrieben von der Beschleunigung. */
+  private softBody(k: Kid, t: number, dt: number, reset: boolean) {
+    const P = k.phys;
+    k.root.updateMatrixWorld(true);
+    // Beschleunigung der Körpermitte und der Mützenspitze (in Körper-Koordinaten)
+    const accel = (obj: THREE.Object3D, pPrev: THREE.Vector3, vPrev: THREE.Vector3) => {
+      obj.getWorldPosition(this._p);
+      if (reset || !P.init || dt <= 0) { pPrev.copy(this._p); vPrev.set(0, 0, 0); return this._a.set(0, 0, 0); }
+      this._v.copy(this._p).sub(pPrev).divideScalar(dt);
+      this._a.copy(this._v).sub(vPrev).divideScalar(dt);
+      pPrev.copy(this._p); vPrev.copy(this._v);
+      if (this._a.length() > 60) this._a.setLength(60);
+      k.body.getWorldQuaternion(this._q);
+      return this._a.applyQuaternion(this._q.invert());
+    };
+    const aBody = accel(k.spinner, P.p, P.v).clone();
+    const aTip = accel(k.tipPivot, P.pt, P.vt).clone();
+    P.init = true;
+    if (reset) { P.j.fill(0); P.jv.fill(0); P.h.fill(0); P.hv.fill(0); }
+    const step = (x: number[], v: number[], i: number, force: number, w: number, z: number, h: number) => {
+      const a = -w * w * x[i] - 2 * z * w * v[i] + force; v[i] += a * h; x[i] += v[i] * h;
+    };
+    const H = 1 / 240;
+    for (let s = 0; s < dt; s += H) {
+      const h = Math.min(H, dt - s);
+      // Bauch: träge Masse – schwappt entgegen der Beschleunigung, wenig gedämpft
+      step(P.j, P.jv, 0, -aBody.x * 0.9, 2 * Math.PI * 3.0, 0.2, h);
+      step(P.j, P.jv, 1, -aBody.z * 0.9, 2 * Math.PI * 3.0, 0.2, h);
+      step(P.j, P.jv, 2, aBody.y * 0.7, 2 * Math.PI * 3.4, 0.22, h);   // Landung: Bauch beult aus, freier Fall: zieht sich ein
+      // Mützenspitze (Pendel) und Bommel (hängt an der Spitze, schwingt nach)
+      step(P.h, P.hv, 0, aTip.x * 3 - aTip.y * 1.2, 2 * Math.PI * 1.6, 0.16, h);  // seitlich + Nachsacken bei der Landung
+      step(P.h, P.hv, 1, -aTip.z * 3, 2 * Math.PI * 1.6, 0.16, h);
+      step(P.h, P.hv, 2, (P.h[0] - P.h[2]) * 40 + aTip.x * 2 - aTip.y * 1.5, 2 * Math.PI * 2.2, 0.14, h); // Bommel hängt an der Spitze
+    }
+    const c = (x: number, m: number) => Math.max(-m, Math.min(m, x));
+    k.jig.value.set(c(P.j[0], 0.06), c(P.j[1], 0.06), c(P.j[2], 0.05));
+    const breeze = 0.04 * Math.sin(t * 1.3 + k.phase * 9);
+    k.tipPivot.rotation.set(c(P.h[1], 0.7), 0, c(P.h[0], 0.8) + breeze);
+    k.bommelPivot.rotation.set(0, 0, c(P.h[2] - P.h[0], 0.9) * 0.8 + breeze * 1.5);
+  }
+
   update(m: Mood) {
-    // Zeitschritt; bei Sprüngen in der Zeitleiste (Vorspulen) Federn sofort auf die Zielhaltung setzen
+    // Zeitschritt; bei Sprüngen in der Zeitleiste (Vorspulen) Federn sofort zurücksetzen
     const now = performance.now();
     const dt = Math.min(0.05, Math.max(0, (now - this.lastNow) / 1000));
-    this.snapSprings = this.lastT < 0 || Math.abs(m.t - this.lastT - dt) > 0.25;
+    const reset = this.lastT < 0 || Math.abs(m.t - this.lastT - dt) > 0.25;
+    this.snapSprings = reset;
     this.lastT = m.t; this.lastNow = now;
+    jellyTime.value = m.t;
     if (m.rapT > 0 && m.rapBeat > 0) setBeatLength(m.rapT / m.rapBeat);
     const { t, beat, energy } = m;
     const herz = m.since.herz ?? 99, licht = m.since.lichter ?? 99, lk = m.since.lichterkinder ?? 99, stern = m.since.stern ?? 99;
@@ -459,6 +528,7 @@ export class Kids {
       const glow = 1.0 + 0.1 * Math.sin(t * 5 + ph * 9) + (licht < 4 ? 1.3 * Math.exp(-licht * 0.8) : 0) + energy * 0.2;
       k.lanternMat.color.copy(k.lanternBase).multiplyScalar(glow);
       // Pendel: Laterne hängt immer nach unten und schwingt – stärker, wenn getanzt wird
+      this.softBody(k, t, dt, reset);
       if (k.lanternGroup.visible) {
         const amp = 0.18 + 0.25 * energy;
         const w = 2 * Math.PI * 0.85;
