@@ -59,6 +59,16 @@ zusätzlich automatisch aus und leuchten beim Singen auf.
   - **Eigene Musikdatei** (mp3/m4a vom Laptop) – immer synchron, die Datei wird im Browser gemerkt.
   - **Ohne Ton** – Countdown 3-2-1, bei „Los!“ die Musik auf einem anderen Gerät starten.
 
+## Vorschau-Versionen (Preview-Branches)
+
+Jeder Branch `preview/<name>` wird zusätzlich unter `https://vanmeegen.github.io/lichterkinder-show/preview/<name>/`
+veröffentlicht – z. B. `preview/rap-solos` → https://vanmeegen.github.io/lichterkinder-show/preview/rap-solos/
+
+- Bei jedem Push auf `main` werden alle Previews mit neu gebaut.
+- Nach Änderungen nur am Preview-Branch: **Actions → „Deploy to GitHub Pages“ → „Run workflow“** (Branch `main` lassen).
+- Musikdatei und Ablauf werden im Browser gemeinsam mit der Hauptversion gespeichert.
+- Übernahme in `main` später: Branch mergen und den Revert-Commit auf `main` vorher zurücknehmen (`git revert <revert-commit>`).
+
 ## Entwicklung
 
 ```bash

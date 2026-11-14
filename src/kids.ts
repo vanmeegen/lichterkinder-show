@@ -1,6 +1,5 @@
 // Die Lichterkinder: eigene, knuffige Bohnen-Figuren mit Mütze, Schal, Laterne – und Armen mit Ellbogen.
 import * as THREE from 'three';
-import { ROUTINES, evalRoutine, soloPlan } from './rapmoves';
 
 export interface Mood {
   t: number;            // Liedzeit (s)
@@ -9,10 +8,6 @@ export interface Mood {
   rap: number;          // 0 … 1 Rap-Teil (alle synchron)
   rapT: number;         // Sekunden seit Beginn des Rap-Teils (−1 außerhalb)
   rapLen: number;       // Länge des Rap-Teils
-  rapBeat: number;      // Schläge seit Beginn des Rap-Teils
-  rapBeats: number;     // Länge des Rap-Teils in Schlägen
-  rapNo: number;        // welcher Rap-Teil (0, 1, 2 …)
-  rapCount: number;     // Anzahl Rap-Teile im Lied
   since: Record<string, number>; // Sekunden seit letztem Effekt je Typ
   look: THREE.Vector3;  // wohin geschaut wird (letzter Knall)
 }
@@ -21,6 +16,7 @@ const BODY = [0xff5a5a, 0x3fb6ff, 0xffc93a, 0x6be07a, 0xff7ad9, 0x9b7bff, 0xff9a
 const HAT = [0x2a9d4b, 0xd62828, 0x2563eb, 0xd62828, 0x10b981, 0xf59e0b, 0x7c3aed, 0xe11d48, 0x1d4ed8];
 const SCARF = [0xffd166, 0xffffff, 0xff6b6b, 0x4cc9f0, 0xffd166, 0xff6b6b, 0x4cc9f0, 0xffffff, 0x80ed99];
 const LANTERN = [0xffb347, 0xff6b6b, 0xffe066, 0x7cf0ff, 0xff8fd8, 0xffb347, 0xb4ff7c, 0xffe066, 0xff9a5a];
+const BREAKER = 4; // das Kind in der Mitte tanzt Breakdance
 
 let gradientMap: THREE.Texture | null = null;
 function toon(color: number) {
@@ -73,19 +69,6 @@ export class Kids {
   herzTimes: number[] = [];
   martinTimes: number[] = [];
   mantel = new THREE.Group(); halves: THREE.Group[] = []; slash!: THREE.Mesh;
-  spots: { disc: THREE.Mesh; beam: THREE.Mesh }[] = [];
-
-  /** Bühnen-Spotlights: Lichtkreis am Boden + Lichtkegel von oben, folgen dem Solisten. */
-  private buildSpots() {
-    for (let i = 0; i < 3; i++) {
-      const disc = new THREE.Mesh(new THREE.CircleGeometry(1.0, 40), new THREE.MeshBasicMaterial({ color: new THREE.Color(1, 0.85, 0.55).multiplyScalar(1.2), transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending }));
-      disc.rotation.x = -Math.PI / 2; disc.position.y = 0.02;
-      const beamGeo = new THREE.CylinderGeometry(0.05, 0.9, 7, 32, 1, true); beamGeo.translate(0, 3.5, 0);
-      const beam = new THREE.Mesh(beamGeo, new THREE.MeshBasicMaterial({ color: new THREE.Color(1, 0.9, 0.65), transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide }));
-      disc.visible = beam.visible = false;
-      this.group.add(disc, beam); this.spots.push({ disc, beam });
-    }
-  }
 
   private buildMantel() {
     const red = toon(0xc81e2a), lining = toon(0xffd166);
@@ -153,7 +136,6 @@ export class Kids {
     this.light.position.set(0, 2.6, 9.5);
     this.group.add(this.light);
     this.buildMantel();
-    this.buildSpots();
     const hg = new THREE.ExtrudeGeometry(heartShape, { depth: 0.12, bevelEnabled: true, bevelSize: 0.04, bevelThickness: 0.04, bevelSegments: 2 });
     hg.center();
     for (let i = 0; i < 27; i++) {
@@ -305,22 +287,6 @@ export class Kids {
     const herz = m.since.herz ?? 99, licht = m.since.lichter ?? 99, lk = m.since.lichterkinder ?? 99, stern = m.since.stern ?? 99;
     const fr = m.since.frieren ?? 99;
     const n = this.kids.length;
-    // Solisten im Rap: pro Solo kommt ein anderes Kind nach vorn und tanzt eine komplette Choreografie;
-    // im letzten Rap-Teil drei Kinder nebeneinander mit drei verschiedenen Choreografien.
-    const solos = new Map<number, { routine: number; p: number; u: number; walk: number; sx: number; sz: number; spot: number }>();
-    if (m.rap > 0 && m.rapT >= 0 && m.rapBeats > 6) {
-      const nSlots = Math.max(1, Math.round(m.rapBeats / 16));
-      const slotBeats = m.rapBeats / nSlots;
-      const slot = Math.min(nSlots - 1, Math.floor(m.rapBeat / slotBeats)), fb = m.rapBeat - slot * slotBeats;
-      const count = m.rapNo === m.rapCount - 1 ? 3 : 2;
-      const WALK = 1.5;
-      const p = ss(fb / WALK) * (1 - ss((fb - (slotBeats - WALK)) / WALK));
-      const u = (fb - WALK) / Math.max(1, slotBeats - 2 * WALK);
-      const walk = fb < WALK ? 1 - fb / WALK : fb > slotBeats - WALK ? (fb - (slotBeats - WALK)) / WALK : 0;
-      const stage = count === 2 ? [[-2.0, 7.4], [2.0, 7.4]] : [[-3.0, 7.2], [0, 7.6], [3.0, 7.2]];
-      soloPlan(m.rapNo, slot, count, n).forEach((pl, j) => solos.set(pl.kid, { routine: pl.routine, p, u, walk, sx: stage[j][0], sz: stage[j][1], spot: j }));
-    }
-    for (const sp of this.spots) { sp.disc.visible = sp.beam.visible = false; }
     for (const k of this.kids) {
       const ph = k.phase;
       // ---------- Grundbewegung ----------
@@ -360,7 +326,7 @@ export class Kids {
 
       // ---------- Rap: alle exakt gleichzeitig, weicher Groove ----------
       const rp = m.rap;
-      let spinnerRx = 0, spinnerRz = 0, extraSpin = 0, liftL = 0, liftR = 0, spread = 0;
+      let spinnerRx = 0, spinnerRz = 0, extraSpin = 0;
       if (rp > 0) {
         const bump = 0.5 + 0.5 * Math.cos(2 * Math.PI * beat);
         const sway = Math.sin(Math.PI * beat / 2);
@@ -370,26 +336,14 @@ export class Kids {
         bodyRz = lerp(bodyRz, 0.09 * sway, rp);
         rotY = lerp(rotY, 0.22 * sway, rp);                                  // lässig mitdrehen
         x += 0.2 * sway * rp;                                                // Seitschritt im Takt
-        zPos -= 2.0 * rp;                                                    // Reihe tritt zurück, Bühne frei für Solisten
-        pose = mixPose(pose, this.rapPose(m.rapBeat, k.idx), rp);
+        pose = mixPose(pose, this.rapPose(beat, k.idx), rp);
 
-        const so = solos.get(k.idx);
-        if (so && so.p > 0) {
-          const r = evalRoutine(ROUTINES[so.routine], so.u, beat), w = so.p * rp;
-          // nach vorn auf die Bühne laufen (mit kleinen Hüpfern), dort tanzen, danach zurück
-          x = lerp(x, so.sx + (r.dx ?? 0), w); zPos = lerp(zPos, so.sz + (r.dz ?? 0), w);
-          y = lerp(y, r.y ?? 0, w) + 0.14 * Math.abs(Math.sin(Math.PI * beat * 2)) * so.walk;
-          pose = mixPose(pose, r.pose, w);
-          bodyRx = lerp(bodyRx, r.rx ?? 0, w); bodyRz = lerp(bodyRz, r.rz ?? 0, w);
-          rotY = lerp(rotY, r.ry ?? 0, w); squash = lerp(squash, r.squash ?? 1, w);
-          spinnerRx = (r.srx ?? 0) * w; spinnerRz = (r.srz ?? 0) * w;
-          liftL = (r.legL ?? 0) * w; liftR = (r.legR ?? 0) * w; spread = (r.spread ?? 0) * w;
-          extraSpin = (r.spin ?? 0) * (so.walk > 0 ? 0 : 1);
-          const sp = this.spots[so.spot];
-          sp.disc.visible = sp.beam.visible = true;
-          sp.disc.position.set(x, 0.02, zPos); sp.beam.position.set(x, 0, zPos);
-          (sp.disc.material as THREE.MeshBasicMaterial).opacity = 0.45 * w;
-          (sp.beam.material as THREE.MeshBasicMaterial).opacity = 0.035 * w;
+        // Breakdance in der Mitte
+        if (k.idx === BREAKER && m.rapT >= 0 && m.rapLen > 16) {
+          const r = this.breakdance(m.rapT, m.rapLen);
+          zPos += r.forward; y = lerp(y, r.y, r.on); spinnerRx = r.rx; spinnerRz = r.rz; extraSpin = r.spin;
+          if (r.on > 0) pose = mixPose(pose, r.pose, r.on);
+          bodyRx *= 1 - r.on; bodyRz *= 1 - r.on; x = lerp(x, k.baseX, r.on);
         }
       }
 
@@ -399,9 +353,8 @@ export class Kids {
       k.spinner.rotation.set(spinnerRx, 0, spinnerRz);
       k.body.rotation.set(bodyRx, spin, bodyRz);
       k.body.scale.set(1 / Math.sqrt(squash), squash, 1 / Math.sqrt(squash));
-      k.legL.position.set(-0.18 - 0.22 * spread, 0.2 + 0.05 * Math.max(0, Math.sin(Math.PI * beat)) * (1 - rp) + 0.2 * liftL, 0.14 * liftL);
-      k.legR.position.set(0.18 + 0.22 * spread, 0.2 + 0.05 * Math.max(0, -Math.sin(Math.PI * beat)) * (1 - rp) + 0.2 * liftR, 0.14 * liftR);
-      k.legL.rotation.set(-0.9 * liftL, 0, -0.6 * spread); k.legR.rotation.set(-0.9 * liftR, 0, 0.6 * spread);
+      k.legL.position.y = 0.2 + 0.05 * Math.max(0, Math.sin(Math.PI * beat)) * (1 - rp);
+      k.legR.position.y = 0.2 + 0.05 * Math.max(0, -Math.sin(Math.PI * beat)) * (1 - rp);
       k.shL.rotation.set(pose.L.sx, 0, pose.L.sz); k.elL.rotation.set(pose.L.ex, 0, pose.L.ez);
       k.shR.rotation.set(pose.R.sx, 0, pose.R.sz); k.elR.rotation.set(pose.R.ex, 0, pose.R.ez);
 
@@ -453,5 +406,31 @@ export class Kids {
       }
     }
     for (; hi < this.hearts.length; hi++) this.hearts[hi].visible = false;
+  }
+
+  /** Ablauf für den Breakdancer: vortreten, Backspin, Headspin, Freeze, zurück. */
+  private breakdance(rt: number, len: number) {
+    const T = { step: 2.2, down: 3.4, back: 3.9, head: 9.6, headIn: 10.0, freeze: 13.0, up: 15.2, ret: 16.4 };
+    const scale = Math.min(1, (len - 2) / 17);
+    const u = rt / scale;               // bei kürzeren Rap-Teilen etwas gestrafft
+    const on = ss((u - T.step) / 0.8) * (1 - ss((u - T.up) / 1.0));
+    const forward = 0.9 * ss((u - T.step) / 1.0) * (1 - ss((u - T.up) / 1.2));
+    const lying = ss((u - T.down) / 0.5) * (1 - ss((u - T.head) / 0.4));
+    const upside = ss((u - T.head) / 0.4) * (1 - ss((u - T.freeze) / 0.5));
+    const frz = ss((u - T.freeze) / 0.5) * (1 - ss((u - T.up) / 0.6));
+    // Drehung: Backspin 1,5 Umdrehungen/s, Headspin 2/s – endet genau nach vorn
+    const back = cl(u - T.back, 0, T.head - T.back), head = cl(u - T.headIn, 0, T.freeze - T.headIn);
+    const spin = 2 * Math.PI * (1.5 * back + 2 * head);
+    const rx = -1.35 * lying;
+    const rz = Math.PI * upside + 1.9 * frz;
+    const y = lying * -0.48 + upside * 0.22 + frz * -0.12;
+    const pose: Pose = lying > 0.5
+      ? { L: arm(0, -1.5, 0, 0), R: mirror(arm(0, -1.5, 0, 0)) }                       // Arme ausgestreckt beim Backspin
+      : upside > 0.5
+        ? { L: arm(0, -2.2, 0, 0.4), R: mirror(arm(0, -2.2, 0, 0.4)) }                  // Arme abstützen beim Headspin
+        : frz > 0.5
+          ? { L: arm(0, -2.9, 0, 0), R: mirror(arm(-0.5, -1.2, -1.4, 0)) }              // Freeze: ein Arm am Boden
+          : { L: arm(-0.6, -0.4, -1.2, 0), R: mirror(arm(-0.6, -0.4, -1.2, 0)) };       // Anlauf
+    return { on, forward, rx, rz, y, spin: spin * on, pose };
   }
 }
