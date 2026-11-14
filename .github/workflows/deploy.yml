@@ -1,4 +1,8 @@
 name: Deploy to GitHub Pages
+# main → https://vanmeegen.github.io/lichterkinder-show/
+# Branches preview/<name> → https://vanmeegen.github.io/lichterkinder-show/preview/<name>/
+# Läuft automatisch bei jedem Push auf main. Previews nach Änderungen manuell aktualisieren:
+# Actions → „Deploy to GitHub Pages“ → „Run workflow“ (Branch: main).
 on:
   push:
     branches: [main]
@@ -15,9 +19,25 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
       - uses: oven-sh/setup-bun@v2
       - run: bun install --frozen-lockfile
       - run: bun run build
+      - name: Preview-Branches bauen
+        run: |
+          git fetch origin '+refs/heads/preview/*:refs/remotes/origin/preview/*' || true
+          for ref in $(git for-each-ref --format='%(refname:short)' refs/remotes/origin/preview/); do
+            name="${ref#origin/preview/}"
+            echo "::group::Preview $name"
+            git worktree add "/tmp/pv-$name" "$ref"
+            (cd "/tmp/pv-$name" && bun install --frozen-lockfile && bun run build)
+            mkdir -p "dist/preview/$name"
+            cp -r "/tmp/pv-$name/dist/." "dist/preview/$name/"
+            echo "::endgroup::"
+          done
+          find dist -maxdepth 3 -name index.html
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
